@@ -19,7 +19,7 @@ import {REN,exportVideo,saveBlob,saveFrame,saveVideo} from './ui/exporter.js';
 import {bindInspector,renderPal,setSegValue,setSegValue2,updateInspector,zonesChanged} from './ui/inspector.js';
 import {setArt} from './ui/load.js';
 import {LANE,T,bindLane,busy,drawLane,loop,playFresh,playing,rebuild,seek,setLastNow,setMode,setPlayIcon,setPlaying,setT,syncLaneBox,togglePlay} from './ui/playback.js';
-import {LS_KEY,applyProject,loadImg,lsArm,lsInit,lsOn,lsRead,lsSave,lsSchedule,projectData,readURL,setDeskImage,setLsOn} from './ui/project.js';
+import {LS_KEY,applyProject,loadImg,lsArm,lsClearAll,lsInit,lsOn,lsRead,lsSave,lsSchedule,projectData,readURL,restoreLast,setDeskImage,setLsOn} from './ui/project.js';
 import {bindFullscreen} from './ui/stage.js';
 import {bindWizard,openFile,syncWizard} from './ui/wizard.js';
 import './styles/app.css';
@@ -72,8 +72,8 @@ export function boot(){
       $('deskInfo').textContent='Зображення столу: '+f.name+'.';updateDesk();if(!playing&&!ed.on&&!busy)renderAt(T)};img.src=URL.createObjectURL(f)};
   $('projSave').onclick=()=>{if(!seg)return;const d=projectData(true),b=new Blob([JSON.stringify(d)],{type:'application/json'});const n='coloring-project-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.json';saveBlob(b,n,m=>{$('lsInfo').textContent=m})};
   $('projFile').onchange=async e=>{const f=e.target.files[0];if(!f||busy)return;try{const d=JSON.parse(await f.text());await applyProject(d);$('lsInfo').textContent='Відкрито проєкт «'+f.name+'».';lsArm()}catch(err){$('lsInfo').textContent='Не вдалося відкрити файл: це не проєкт студії або він пошкоджений.'}};
-  $('lsRestore').onclick=async()=>{const d=lsRead();if(!d)return;try{await applyProject(d);$('lsInfo').textContent='Проєкт відновлено з браузера.';lsArm()}catch(err){$('lsInfo').textContent='Збереження в браузері пошкоджене.'}};
-  $('lsClear').onclick=()=>{try{localStorage.removeItem(LS_KEY)}catch(e){}$('lsRestore').hidden=$('lsClear').hidden=true;$('lsInfo').textContent='Збереження в браузері видалено.'};
+  $('lsRestore').onclick=async()=>{const d=await lsRead();if(!d)return;try{await applyProject(d);$('lsInfo').textContent='Проєкт відновлено з браузера.';lsArm()}catch(err){$('lsInfo').textContent='Збереження в браузері пошкоджене.'}};
+  $('lsClear').onclick=async()=>{await lsClearAll();$('lsRestore').hidden=$('lsClear').hidden=true;$('lsInfo').textContent='Збереження в браузері видалено.'};
   $('lsAuto').onchange=e=>{setLsOn(e.target.checked);try{localStorage.setItem(LS_KEY+'.auto',lsOn?'1':'0')}catch(err){}if(lsOn)lsSchedule()};
   ['change','input'].forEach(ev=>document.querySelector('.panel').addEventListener(ev,()=>{lsArm();lsSchedule()}));
   app.view.addEventListener('pointerup',()=>{if(ed.on){lsArm();lsSchedule()}});
@@ -112,7 +112,7 @@ export function boot(){
     loadArtURL:url=>new Promise(res=>{const img=new Image();img.onload=()=>{const a=loadArtFromImage(img);a.srcURL=url;setArt(a,true);setTimeout(res,600)};img.src=url}),projectData,applyProject,lsSave:()=>{lsArm();lsSave()},lsRead};
   compactUI();
   bindWizard(()=>{applyFormat(view.fmt);if(ed.on)ed.dirtyPaint=true;else rebuild(true);syncWizard()});
-  setArt(buildDemo(),false);
+  restoreLast(()=>setArt(buildDemo(),false));
   requestAnimationFrame(t=>{setLastNow(t);loop(t)});
 }
 boot();

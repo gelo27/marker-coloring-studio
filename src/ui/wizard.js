@@ -8,7 +8,7 @@ import {ed} from '../editor/editor.js';
 import {ic} from './controls.js';
 import {estimateExport,exportVideo} from './exporter.js';
 import {addToPalette,makeSwatch,selZones,setOrder,setSegValue,setSegValue2,updateInspector,zonesChanged} from './inspector.js';
-import {setArt} from './load.js';
+import {resegment,setArt} from './load.js';
 import {busy,setMode} from './playback.js';
 import {applyProject,loadImg,lsArm,readURL} from './project.js';
 /* ================= STEP-BY-STEP MODE =================
@@ -46,6 +46,7 @@ export function gotoStep(n){
   document.querySelectorAll('#wiz .step').forEach(s=>s.hidden=+s.dataset.step!==n);
   [...$('steps').children].forEach(b=>{const k=+b.dataset.s;b.setAttribute('aria-current',k===n?'step':'false');b.classList.toggle('done',k<n)});
   $('wPrev').hidden=n===1;$('wNext').hidden=n===STEPS;$('wStepN').textContent=n+' / '+STEPS;
+  if(n!==2&&ed.lasso.on){ed.lasso.on=false;ed.lasso.pts=null}
   if(seg){
     if(n===2)enterEditor($('wZoneView').querySelector('[aria-pressed="true"]')?.dataset.v||'map',null);
     else if(n===3){ed.sel.clear();if(WZ.brush!=null&&palette.length&&!palette.some(c=>c.toLowerCase()===WZ.brush.toLowerCase()))WZ.brush=palette[0];enterEditor('final',paintTap)}
@@ -113,7 +114,7 @@ export function syncWizard(){
   if(!$('wiz'))return;const n=WZ.step;
   setSegValue('wFormats',view.fmt);
   if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=S.duration+' с';$('wTool').value=S.tool}
-  else if(n===2){zoneStats();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
+  else if(n===2){zoneStats();if(WZ.lassoUI)WZ.lassoUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
     $('wMinArea').value=IMP.minArea;$('wMinAreaV').textContent=IMP.minArea;setSegValue('wZoneView',ed.view==='final'?'final':'map')}
   else if(n===3){renderWPal();$('wShadeRow').hidden=!(art&&art.colored);$('wShade').checked=SHADE.on;$('wUndo').disabled=!WZ.undo.length}
   else if(n===4){$('wGroupRule').value=$('wGroupRule').value||'light';syncOrderUI()}
@@ -147,6 +148,19 @@ export function bindWizard(onPreview){
   $('wReseg').onclick=()=>{if(!art||busy)return;const v=+$('wLineK').value;IMP.minArea=+$('wMinArea').value;
     if(art.colored){IMP.thr=v;$('impThr').value=v;$('impThrV').textContent=v.toFixed(2);art.lineCv=extractLines(art.srcCv,IMP.thr)}else IMP.lineK=v;
     setArt(art,true,()=>gotoStep(2))};
+  // contours for zones the outline did not close
+  const lassoUI=()=>{const n=art&&art.walls?art.walls.length:0;$('wLasso').textContent=ed.lasso.on?'Готово':n?'Обвести ще':'Обвести зону';$('wLasso').classList.toggle('active',ed.lasso.on);$('wLassoUndo').disabled=!n;$('wLassoClear').disabled=!n;
+    if(ed.on)$('modeHint').textContent=ed.lasso.on?'Обведіть ділянку й відпустіть — контур замкнеться сам · два пальці — масштаб':HINTS[2]};
+  WZ.lassoUI=lassoUI;
+  $('wLasso').onclick=()=>{if(!seg||busy)return;if(!ed.on)enterEditor('map',null);ed.lasso.on=!ed.lasso.on;lassoUI()};
+  ed.onLasso=pts=>{art.walls=(art.walls||[]).concat([pts]);ed.lasso.on=false;lassoUI();
+    resegment(()=>{const inPoly=(x,y)=>{let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const a=pts[i],b=pts[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
+      const hit=zones.filter(z=>inPoly(z.r.cx,z.r.cy)).sort((a,b)=>b.r.area-a.r.area)[0];
+      if(hit){ed.sel=new Set([hit.i]);ed.dirtySel=true;updateInspector();$('wLassoHint').textContent='Готово: обведене стало зоною #'+hit.i+'. Її колір і налаштування можна змінити на наступних кроках.'}
+      else $('wLassoHint').textContent='Усередині контуру не вийшло окремої зони: обведіть ділянку ширше, уздовж ліній малюнка.';
+      lassoUI()})};
+  $('wLassoUndo').onclick=()=>{if(!art||!art.walls||!art.walls.length||busy)return;art.walls=art.walls.slice(0,-1);resegment(lassoUI)};
+  $('wLassoClear').onclick=()=>{if(!art||!art.walls||!art.walls.length||busy)return;art.walls=[];resegment(lassoUI)};
   $('wSelSkip').onclick=()=>{const sel=selZones();if(!sel.length)return;const on=!sel[0].skip;sel.forEach(z=>z.skip=on);zonesChanged(true)};
   // step 3
   $('wAddColor').onclick=()=>{const c=$('wColor').value;addToPalette(c);WZ.brush=c;renderWPal()};

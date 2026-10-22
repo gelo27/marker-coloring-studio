@@ -3,7 +3,7 @@ import {plan,planDirty,replan} from '../core/plan.js';
 import {MOBILE_MQ,PREV,PREV_SCALE,isMobileUI,view} from '../core/settings.js';
 import {$,clamp} from '../core/utils.js';
 import {seg,zoneByI} from '../core/zones.js';
-import {ed,edFit,renderEditor} from '../editor/editor.js';
+import {ed,edFit,hideLasso,renderEditor} from '../editor/editor.js';
 import {camInit,camStep} from '../render/camera.js';
 import {resetPaint} from '../render/paint.js';
 import {renderAt} from '../render/renderer.js';
@@ -115,7 +115,7 @@ export function setMode(m){
   ['play','restart'].forEach(id=>$(id).disabled=false);
   $('modeHint').textContent=ed.on?'Клік: вибрати зону · Shift: додати · колесо: зум':'';
   if(ed.on){playing=false;stopAudio();setPlayIcon();edFit();ed.dirtyPaint=true;ed.dirtySel=true;showTab('zones');$('zoneSec').open=true;updateInspector()}
-  else{paperShader.uniforms.uSelOn=0;if(planDirty||!plan)rebuild(false);else seek(T)}
+  else{paperShader.uniforms.uSelOn=0;ed.lasso.on=false;ed.lasso.pts=null;hideLasso();if(planDirty||!plan)rebuild(false);else seek(T)}
 }
 export function setT(v){T=v}
 export function setPlaying(v){playing=v}

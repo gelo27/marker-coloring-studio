@@ -26,7 +26,7 @@ export async function setDeskImage(url,name,auto){
 export function projectData(img){
   const pick=(o,ks)=>{const r={};ks.forEach(k=>r[k]=o[k]);return r};
   return{app:'marker-coloring-studio',v:1,saved:new Date().toISOString(),
-    art:art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},
+    art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null}),
     S:{camMode:S.camMode,tool:S.tool,duration:S.duration,montage:S.montage,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
     U:Object.assign({},U),PUFF:Object.assign({},PUFF),DUO:Object.assign({},DUO),GLT:Object.assign({},GLT),IMP:Object.assign({},IMP),SHADE:Object.assign({},SHADE),
     SND:pick(SND,['on','vol','strokes','events','room','reverb']),FLY:JSON.parse(JSON.stringify(FLY)),
@@ -73,6 +73,7 @@ export async function applyProject(d){
   if(d.art&&d.art.demo)a=buildDemo();
   else if(d.art&&d.art.src){const im=await loadImg(d.art.src);a=loadArtFromImage(im);a.srcURL=d.art.src}
   else throw new Error('noimg');
+  if(d.art&&d.art.walls)a.walls=d.art.walls;
   const refIm=d.art&&d.art.ref?await loadImg(d.art.ref):null;
   await new Promise(res=>setArt(a,false,()=>{
     if(refIm){applySrcColors(refIm);art.refURL=d.art.ref}
@@ -82,19 +83,36 @@ export async function applyProject(d){
     if(d.FLY)FLY.segs=d.FLY.segs||null;
     setToolSprite();renderPal('palette',true);ed.dirtyPaint=true;rebuild(false);updateInspector();res()}));
 }
-export function lsRead(){try{const t=localStorage.getItem(LS_KEY);return t?JSON.parse(t):null}catch(e){return null}}
+/* Autosave lives in IndexedDB (room for the page pictures, which rarely fit into localStorage's ~5 MB);
+   localStorage is the fallback when IndexedDB is unavailable. */
+let idbP=null;
+function idb(){return idbP||(idbP=new Promise((res,rej)=>{const r=indexedDB.open('mcs',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))}
+async function idbDo(mode,fn){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction('kv',mode),q=fn(t.objectStore('kv'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
+export async function lsRead(){try{const d=await idbDo('readonly',st=>st.get(LS_KEY));if(d)return d}catch(e){}try{const t=localStorage.getItem(LS_KEY);return t?JSON.parse(t):null}catch(e){return null}}
+export async function lsClearAll(){try{await idbDo('readwrite',st=>st.delete(LS_KEY))}catch(e){}try{localStorage.removeItem(LS_KEY)}catch(e){}}
 export function lsArm(){lsArmed=true}
-export function lsSave(){
-  if(!lsOn||!lsArmed||!seg||busy)return;
-  const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
-  try{let note='з картинками';try{localStorage.setItem(LS_KEY,JSON.stringify(projectData(true)))}catch(e){localStorage.setItem(LS_KEY,JSON.stringify(projectData(false)));note='без картинок: забагато для браузера, для повної копії збережіть .json'}
-    $('lsInfo').textContent='Автозбережено о '+t+', '+note+'.';$('lsRestore').hidden=$('lsClear').hidden=false}
-  catch(e){$('lsInfo').textContent='Браузер не дозволяє зберігати дані на цій сторінці. Користуйтеся збереженням .json.'}
+export async function lsSave(){
+  lsTimer=0;if(!lsOn||!lsArmed||!seg||busy)return;
+  const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});let note='з картинками';
+  try{await idbDo('readwrite',st=>st.put(projectData(true),LS_KEY));try{localStorage.removeItem(LS_KEY)}catch(e){}}
+  catch(e){try{try{localStorage.setItem(LS_KEY,JSON.stringify(projectData(true)))}catch(e2){localStorage.setItem(LS_KEY,JSON.stringify(projectData(false)));note='без картинок: забагато для браузера, для повної копії збережіть .json'}}
+    catch(e3){$('lsInfo').textContent='Браузер не дозволяє зберігати дані на цій сторінці. Користуйтеся збереженням .json.';return}}
+  $('lsInfo').textContent='Автозбережено о '+t+', '+note+'.';$('lsRestore').hidden=$('lsClear').hidden=false;
 }
 export function lsSchedule(){if(!lsOn||!lsArmed)return;clearTimeout(lsTimer);lsTimer=setTimeout(lsSave,2000)}
 export function lsInit(){
   try{const a=localStorage.getItem(LS_KEY+'.auto');if(a==='0'){lsOn=false;$('lsAuto').checked=false}}catch(e){}
-  const d=lsRead();if(d){$('lsRestore').hidden=$('lsClear').hidden=false;const when=d.saved?new Date(d.saved).toLocaleString('uk-UA',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}):'';
-    $('lsInfo').textContent='У браузері є збережений проєкт'+(when?' ('+when+')':'')+(d.art&&!d.art.demo&&!d.art.src?', без картинки сторінки':'')+'.';}
+  // leaving the page (closing the tab, switching apps on a phone) saves pending changes at once
+  const flush=()=>{if(lsTimer){clearTimeout(lsTimer);lsSave()}};
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush()});window.addEventListener('pagehide',flush);
+}
+/* On start: the last autosaved project opens by itself; without one (or if it cannot be read) the demo loads. */
+export async function restoreLast(fallback){
+  let d=null;if(lsOn){try{d=await lsRead()}catch(e){}}
+  if(d&&d.art&&(d.art.demo||d.art.src)){$('lsRestore').hidden=$('lsClear').hidden=false;
+    try{await applyProject(d);lsArm();const when=d.saved?new Date(d.saved).toLocaleString('uk-UA',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}):'';
+      $('lsInfo').textContent='Відкрито останній проєкт'+(when?' ('+when+')':'')+'.';return true}catch(e){}}
+  if(d)$('lsInfo').textContent='Збережений проєкт без картинки сторінки не вдалося відкрити — завантажено демо.';
+  fallback();return false;
 }
 export function setLsOn(v){lsOn=v}

@@ -12,6 +12,11 @@ export function analyze(art){
     ld[j]=40;ld[j+1]=30;ld[j+2]=48;ld[j+3]=k*255;
     if(drk>IMP.lineK)isLine[i]=1;
   }
+  // contours the user drew around zones the outline did not close: they split regions like lines, but leave no ink
+  // (zone masks grow over line pixels, so the paint of both sides meets under the invisible wall)
+  if(art.walls&&art.walls.length){const wc=mk(W,H),wx=wc.getContext('2d');wx.strokeStyle='#000';wx.lineWidth=2.5*SS;wx.lineCap='round';wx.lineJoin='round';
+    for(const p of art.walls){if(p.length<3)continue;wx.beginPath();p.forEach((q,k)=>k?wx.lineTo(q[0],q[1]):wx.moveTo(q[0],q[1]));wx.closePath();wx.stroke()}
+    const wd=wx.getImageData(0,0,W,H).data;for(let i=0;i<N;i++)if(wd[i*4+3]>40)isLine[i]=1}
   ltx.putImageData(lt,0,0);
   const lab=new Int32Array(N),stack=new Int32Array(N),regs=[];let R=0;
   for(let s=0;s<N;s++){

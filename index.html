@@ -86,6 +86,9 @@
           <div class="row sl"><label for="wLineK">Чутливість контуру</label><input type="range" id="wLineK" min="0.2" max="0.7" step="0.01" value="0.42"><span class="val" id="wLineKV">0.42</span></div>
           <div class="row sl"><label for="wMinArea">Найменша зона</label><input type="range" id="wMinArea" min="20" max="600" step="5" value="95"><span class="val" id="wMinAreaV">95</span></div>
           <button class="btn small" id="wReseg">Перерахувати зони</button>
+          <span class="lbl">Зони, яких не знайдено</span>
+          <div class="btns"><button class="btn small" id="wLasso">Обвести зону</button><button class="btn small" id="wLassoUndo" disabled>Скасувати контур</button><button class="btn small" id="wLassoClear" disabled>Прибрати всі</button></div>
+          <p class="hint" id="wLassoHint">Якщо ділянку не виділено окремою зоною (в контурі розрив або деталь злилася з сусідньою), натисніть «Обвести зону» й обведіть її пальцем чи мишею: контур замкнеться сам і стане межею нової зони. На папері його не видно.</p>
           <div class="selinfo" id="wZoneSel" hidden><span class="dot" id="wSelDot"></span><b id="wSelName"></b><button class="btn small" id="wSelSkip"></button></div>
           <p class="hint">Кожна зона на карті має свій колір. Перевірте, чи не злиплися сусідні ділянки (так буває, коли в контурі розрив) і чи не загубились дрібні деталі. Торкніться зони, щоб вибрати її; колесо або два пальці — масштаб.</p>
         </section>
