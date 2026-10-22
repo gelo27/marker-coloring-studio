@@ -57,7 +57,7 @@
       </div>
 
       <nav class="steps" id="steps" aria-label="Кроки">
-        <button data-s="1"><i>1</i>Картинка</button><button data-s="2"><i>2</i>Зони</button><button data-s="3"><i>3</i>Кольори</button><button data-s="4"><i>4</i>Порядок</button><button data-s="5"><i>5</i>Камера</button><button data-s="6"><i>6</i>Відео</button><button data-s="adv"><i>⋯</i>Ще</button>
+        <button data-s="1"><i>1</i>Картинка</button><button data-s="2"><i>2</i>Зони</button><button data-s="3"><i>3</i>Кольори</button><button data-s="4"><i>4</i>Порядок</button><button data-s="5"><i>5</i>Камера</button><button data-s="6"><i>6</i>Звук</button><button data-s="7"><i>7</i>Відео</button><button data-s="adv"><i>⋯</i>Ще</button>
       </nav>
 
       <div id="wiz" class="wiz">
@@ -74,7 +74,8 @@
           <span class="lbl">Формат відео</span>
           <div class="seg" id="wFormats"><button data-f="9x16">9:16</button><button data-f="4x5">4:5</button><button data-f="1x1">1:1</button><button data-f="16x9">16:9</button></div>
           <div class="row sl"><label for="wDur">Тривалість</label><input type="range" id="wDur" min="30" max="120" step="5" value="60"><span class="val" id="wDurV">60 с</span></div>
-          <div class="row"><label for="wTool">Чим малювати</label><select id="wTool"></select></div>
+          <span class="lbl">Чим малювати</span>
+          <div class="tgrid" id="wToolGrid" role="radiogroup" aria-label="Інструмент"></div>
           <p class="hint" id="wArtInfo">Почніть із демо або завантажте свою сторінку.</p>
         </section>
 
@@ -87,8 +88,13 @@
           <div class="row sl"><label for="wMinArea">Найменша зона</label><input type="range" id="wMinArea" min="20" max="600" step="5" value="95"><span class="val" id="wMinAreaV">95</span></div>
           <button class="btn small" id="wReseg">Перерахувати зони</button>
           <span class="lbl">Зони, яких не знайдено</span>
-          <div class="btns"><button class="btn small" id="wLasso">Обвести зону</button><button class="btn small" id="wLassoUndo" disabled>Скасувати контур</button><button class="btn small" id="wLassoClear" disabled>Прибрати всі</button></div>
-          <p class="hint" id="wLassoHint">Якщо ділянку не виділено окремою зоною (в контурі розрив або деталь злилася з сусідньою), натисніть «Обвести зону» й обведіть її пальцем чи мишею: контур замкнеться сам і стане межею нової зони. На папері його не видно.</p>
+          <div class="btns"><button class="btn small" id="wBrush">Намалювати зону</button><button class="btn small" id="wMaskUndo" disabled>Скасувати останню</button><button class="btn small" id="wMaskClear" disabled>Прибрати всі</button></div>
+          <div class="brushbox" id="wBrushBox" hidden>
+            <div class="seg" id="wBrushMode"><button data-v="paint" aria-pressed="true">Пензлик</button><button data-v="erase" aria-pressed="false">Гумка</button></div>
+            <div class="row sl"><label for="wBrushSize">Розмір пензлика</label><input type="range" id="wBrushSize" min="3" max="80" step="1" value="16"><span class="val" id="wBrushSizeV">16</span></div>
+            <div class="btns"><button class="btn small" id="wBrushUndo" disabled>Скасувати мазок</button><button class="btn small" id="wBrushCancel">Скасувати</button><button class="btn small cta" id="wBrushApply" disabled>Готово — створити зону</button></div>
+          </div>
+          <p class="hint" id="wMaskHint">Якщо ділянку не виділено окремою зоною, натисніть «Намалювати зону» й замалюйте її пензликом — скільки завгодно мазками, з відривом. Гумкою можна підправити краї, двома пальцями чи колесом — масштаб. Замальоване стане однією зоною; лінії малюнка всередині лишаться на папері.</p>
           <div class="selinfo" id="wZoneSel" hidden><span class="dot" id="wSelDot"></span><b id="wSelName"></b><button class="btn small" id="wSelSkip"></button></div>
           <p class="hint">Кожна зона на карті має свій колір. Перевірте, чи не злиплися сусідні ділянки (так буває, коли в контурі розрив) і чи не загубились дрібні деталі. Торкніться зони, щоб вибрати її; колесо або два пальці — масштаб.</p>
         </section>
@@ -129,6 +135,15 @@
         </section>
 
         <section class="step" data-step="6" hidden>
+          <h2>Звук</h2>
+          <label class="switch"><input type="checkbox" id="wSndOn" checked> ASMR-звук інструментів</label>
+          <div id="wSndMix" class="sndmix"></div>
+          <span class="lbl">Звук кожного інструмента</span>
+          <div id="sndToolsW" class="sndtools"></div>
+          <p class="hint">Звук синтезується під кожен рух руки. Тут можна прибрати те, що заважає: скрип, булькання, тріск, клацання ковпачка, і змінити висоту тону. Слухайте в навушниках.</p>
+        </section>
+
+        <section class="step" data-step="7" hidden>
           <h2>Відео</h2>
           <span class="lbl">Куди публікуєте</span>
           <div class="presets" id="wPresets">
@@ -156,6 +171,7 @@
         <button role="tab" data-tab="zones" aria-selected="false">Зони</button>
         <button role="tab" data-tab="hand" aria-selected="false">Інструмент</button>
         <button role="tab" data-tab="cam" aria-selected="false">Камера</button>
+        <button role="tab" data-tab="snd" aria-selected="false">Звук</button>
         <button role="tab" data-tab="out" aria-selected="false">Експорт</button>
       </nav>
       <details data-tab="page" open id="projSec">
@@ -210,9 +226,9 @@
       </details>
 
       <details data-tab="zones" open>
-        <summary>Тіні об'єму <span class="badge" id="vsBadge">увімк.</span></summary>
+        <summary>Тіні об'єму <span class="badge" id="vsBadge">вимк.</span></summary>
         <div class="body">
-          <label class="switch"><input type="checkbox" id="vsOn" checked> Фломастер домальовує тіні після всіх зон</label>
+          <label class="switch"><input type="checkbox" id="vsOn"> Фломастер домальовує тіні після всіх зон</label>
           <div class="row"><label for="vsDir">Звідки світло</label><select id="vsDir"><option value="ul" selected>Зверху зліва</option><option value="u">Зверху</option><option value="ur">Зверху справа</option><option value="r">Справа</option><option value="dr">Знизу справа</option><option value="d">Знизу</option><option value="dl">Знизу зліва</option><option value="l">Зліва</option></select></div>
           <div class="row"><label for="vsStyle">Стиль тіні</label><select id="vsStyle"><option value="solid" selected>Суцільна</option><option value="soft">М'який перехід</option><option value="hatch">Комікс-штриховка</option></select></div>
           <div class="row"><label for="vsW">Ширина тіні</label><span class="val" id="vsWV">0.26</span></div>
@@ -364,7 +380,7 @@
         </div>
       </details>
 
-      <details data-tab="out" open id="sndSec">
+      <details data-tab="snd" open id="sndSec">
         <summary>Звук <span class="badge" id="sndBadge">ASMR</span></summary>
         <div class="body">
           <label class="switch"><input type="checkbox" id="sndOn" checked> Звук інструмента</label>
@@ -380,6 +396,11 @@
           <input type="range" id="sndRev" min="0" max="1" step="0.05" value="0.35">
           <p class="hint" id="sndInfo">Звук синтезується під кожен рух руки: швидкість, натиск, фактуру паперу й зміну кольору. Музики немає. Слухайте в навушниках.</p>
         </div>
+      </details>
+
+      <details data-tab="snd" open>
+        <summary>Звук інструментів</summary>
+        <div class="body sndtools" id="sndToolsA"></div>
       </details>
 
       <details data-tab="out" open>

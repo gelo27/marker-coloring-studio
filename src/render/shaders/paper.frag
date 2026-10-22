@@ -58,7 +58,10 @@ void main(){
   float wet=clamp(wetS(uWet0,uWetRect0,vUv)+wetS(uWet1,uWetRect1,vUv),0.,1.)*uWetStr;
   float cov=c.a*(1.-pat*.55*max(det,0.)*2.2*(1.-wet*.8))*(1.-uGrain*.1*max(fine,0.));
   vec3 inkT=ink*(1.+det*pat*.9*(1.-wet*.6))*(1.-.04*pat);
-  if(mTooth>0.){float tt=h*.55+vn(px*mTS)*.45;float thr=1.-cov*(1.05+mTooth*.3);float dep=smoothstep(thr-.1,thr+.1,tt)*min(1.,cov*1.5);cov=mix(cov,dep,clamp(mTooth,0.,1.));}
+  // paper tooth: dry pigment catches on the peaks of the paper grain; valleys stay white until the layer gets dense,
+  // and even a heavy layer keeps a few white specks
+  if(mTooth>0.){float tt=vn(px*mTS)*.55+vn(px*mTS*2.3+7.1)*.3+vn(px*mTS*5.1+3.7)*.15;float thr=1.12-cov*.98;
+    float dep=smoothstep(thr-.16,thr+.16,tt)*min(1.,cov*1.5)*.95;cov=mix(cov,dep,clamp(mTooth,0.,1.));}
   if(mChalk>0.){inkT=mix(inkT,vec3(1.),mChalk*.13);inkT*=1.-mChalk*.1*(vn(px*.7)-.5);cov*=1.-mChalk*.25*step(.93,hash(floor(px*.8)));}
   if(mSpray>0.){float sp=hash(floor(px*1.3));cov=clamp(cov*.45+step(1.-cov*1.15,sp)*.6*min(1.,cov*2.2),0.,1.);}
   float duoSp=0.;vec3 duoF=vec3(0.);

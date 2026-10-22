@@ -11,15 +11,16 @@ export let art,seg,zones=[],zoneByI=new Map(),palette=[],palSeed=1;
 export function pageArea(){return seg.W*seg.H}
 export function initZones(){
   const minArea=(IMP.minArea||95)*SS*SS,rnd=rngOf(4242);
-  let regs=seg.regs.filter(r=>r.area>=minArea);
-  if(art.demo)regs=regs.filter(r=>r.id&&DEMO_COLORS[r.id]);
-  else regs=regs.filter(r=>!r.edge&&r.area<pageArea()*.6);
+  // zones painted by hand are always kept, whatever their size or position
+  let regs=seg.regs.filter(r=>r.user?r.area>=16:r.area>=minArea);
+  if(art.demo)regs=regs.filter(r=>r.user||(r.id&&DEMO_COLORS[r.id]));
+  else regs=regs.filter(r=>r.user||(!r.edge&&r.area<pageArea()*.6));
   zones=[];zoneByI=new Map();
   const big=art.demo?null:regs.slice().sort((a,b)=>b.area-a.area)[0];
   regs.forEach((r,k)=>{
     const z={i:r.i,r,skip:false,close:'auto',zoom:null,speed:'auto',hue:hsl2hex(((k*0.61803)%1),.68,.72)};
     r.isBg=art.demo?r.id==='bg':(r===big&&r.area>pageArea()*.18);
-    if(art.demo){z.color=DEMO_COLORS[r.id];r.group=DEMO_GROUP[r.id]}
+    if(art.demo){z.color=DEMO_COLORS[r.id]||'#FF8FAB';r.group=DEMO_GROUP[r.id]||'deco'}
     // automatic (random) defaults
     const bw=r.x1-r.x0+1,bh=r.y1-r.y0+1,frac=r.area/pageArea();
     if(art.demo){const g=r.group;z.aClose=!!DEMO_ZOOM[g]&&DEMO_ZOOM[g]>=1.6;z.aZoom=DEMO_ZOOM[g]||1.3;z.aFast=g==='bg'||(g==='liner'&&rnd()<.5)||(g==='frost'&&rnd()<.35)}

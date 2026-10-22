@@ -1,9 +1,10 @@
 import * as PIXI from 'pixi.js';
 import {plan,viewFit} from '../core/plan.js';
+import {drawMask} from '../core/segment.js';
 import {OVS,SHADE,view} from '../core/settings.js';
 import {inside} from '../core/strokes.js';
-import {$,SS,TAU,clamp,hsl2hex} from '../core/utils.js';
-import {art,orderedZones,seg,syncLk,zClose,zFast,zoneByI,zoneTone,zones} from '../core/zones.js';
+import {$,SS,TAU,clamp,hsl2hex,mk} from '../core/utils.js';
+import {orderedZones,seg,syncLk,zClose,zFast,zoneByI,zoneTone,zones} from '../core/zones.js';
 import {setPR} from '../render/camera.js';
 import {hideGrains} from '../render/glitter.js';
 import {colorCtx,colorTex,ensureTmp,regionMask,setWetUniforms,tmpCtx,tmpCv,wetSlots} from '../render/paint.js';
@@ -12,17 +13,17 @@ import {app,jarC,paperC,paperShader,penC,penShadow,postShader,selCtx,selCv,selTe
 import {showTab} from '../ui/controls.js';
 import {setOrder,updateInspector} from '../ui/inspector.js';
 /* ================= ZONE EDITOR ================= */
-export const ed={on:false,view:'map',x:0,y:0,z:1,sel:new Set(),dirtyPaint:true,dirtySel:true,lasso:{on:false,pts:null}};
-/* the contour being drawn and the contours already added, over the page while editing */
-let lassoG=null;
-export function drawLasso(){
-  if(!paperC)return;if(!lassoG||lassoG.parent!==paperC){lassoG=new PIXI.Graphics();paperC.addChild(lassoG)}
-  const g=lassoG,cw=app.view.getBoundingClientRect().width||view.W,lw=3*view.W/cw/(viewFit()*ed.z),p=ed.lasso.pts;g.clear();g.visible=ed.on;
-  (art&&art.walls||[]).forEach(w=>{if(w.length<3)return;g.lineStyle(lw,0xE3416F,.75);g.moveTo(w[0][0],w[0][1]);for(let k=1;k<w.length;k++)g.lineTo(w[k][0],w[k][1]);g.closePath()});
-  if(p&&p.length){g.lineStyle(lw*1.4,0xE3416F,1);g.moveTo(p[0][0],p[0][1]);for(let k=1;k<p.length;k++)g.lineTo(p[k][0],p[k][1]);
-    if(p.length>2){g.lineStyle(lw,0xE3416F,.45);g.lineTo(p[0][0],p[0][1])}
-    g.lineStyle(0);g.beginFill(0xffffff);g.drawCircle(p[0][0],p[0][1],lw*2.4);g.endFill();g.beginFill(0xE3416F);g.drawCircle(p[0][0],p[0][1],lw*1.4);g.endFill()}}
-export function hideLasso(){if(lassoG)lassoG.visible=false}
+export const ed={on:false,view:'map',x:0,y:0,z:1,sel:new Set(),dirtyPaint:true,dirtySel:true,brush:{on:false,erase:false,size:16,mask:null,stroke:null}};
+/* painting a zone by hand: the strokes so far as a pink overlay (quarter resolution) and the brush outline under the mouse */
+let brushSpr=null,brushCv=null,brushTex=null,brushG=null,cursorPt=null;
+export function drawBrush(){
+  if(!paperC||!seg)return;
+  if(!brushSpr||brushSpr.parent!==paperC||brushCv.width!==Math.ceil(seg.W/4)){brushCv=mk(Math.ceil(seg.W/4),Math.ceil(seg.H/4));if(brushTex)brushTex.destroy(true);brushTex=PIXI.Texture.from(brushCv);
+    brushSpr=new PIXI.Sprite(brushTex);brushSpr.scale.set(4);brushSpr.alpha=.55;brushG=new PIXI.Graphics();paperC.addChild(brushSpr);paperC.addChild(brushG)}
+  const B=ed.brush,on=ed.on&&B.on;brushSpr.visible=brushG.visible=on;if(!on)return;
+  const x=brushCv.getContext('2d');x.clearRect(0,0,brushCv.width,brushCv.height);x.fillStyle=x.strokeStyle='#E3416F';if(B.mask)drawMask(x,B.mask.s,.25);brushTex.baseTexture.update();
+  brushG.clear();if(cursorPt){const lw=2*view.W/(app.view.getBoundingClientRect().width||view.W)/(viewFit()*ed.z);brushG.lineStyle(lw,B.erase?0xffffff:0xE3416F,.95);brushG.drawCircle(cursorPt[0],cursorPt[1],B.size*SS)}}
+export function hideBrush(){if(brushSpr)brushSpr.visible=false;if(brushG)brushG.visible=false}
 export function edFit(){ed.x=seg.W/2;ed.y=seg.H/2;ed.z=1}
 export function paintPreview(){
   colorCtx.clearRect(0,0,seg.W,seg.H);
@@ -56,7 +57,7 @@ export function paintSel(){
   selTex.baseTexture.update();ed.dirtySel=false;
 }
 export function renderEditor(t){
-  if(ed.dirtyPaint){paintPreview();drawLasso()}if(ed.dirtySel)paintSel();
+  if(ed.dirtyPaint){paintPreview();drawBrush()}if(ed.dirtySel)paintSel();
   wetSlots.forEach(s=>s.active=false);setWetUniforms();paperShader.uniforms.uWetStr=0;
   paperShader.uniforms.uSelOn=1;paperShader.uniforms.uFlat=1;if(jarC)jarC.visible=false;hideGrains();paperShader.uniforms.uTime=t;paperShader.uniforms.uCamPhase=t*.8;paperShader.uniforms.uShine=-1;
   penC.visible=penShadow.visible=false;(plan&&plan.sparkles||[]).forEach(s=>s.g&&s.g.scale.set(0));
@@ -77,20 +78,22 @@ export function bindEditor(){
   const mid=()=>{const a=[...pts.values()];return{x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)||1}};
   cv.addEventListener('wheel',e=>{if(!ed.on)return;e.preventDefault();const w=screenToWorld(e);edZoom(Math.exp(-e.deltaY*.0015),w[0],w[1])},{passive:false});
   cv.addEventListener('pointerdown',e=>{if(!ed.on)return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});try{cv.setPointerCapture(e.pointerId)}catch(err){}
-    if(pts.size===2){const m=mid();pinch={m,z:ed.z,ex:ed.x,ey:ed.y,w:screenToWorld({clientX:m.x,clientY:m.y})};down=null;if(ed.lasso.pts){ed.lasso.pts=null;drawLasso()}}
-    else if(pts.size===1){if(ed.lasso.on){ed.lasso.pts=[screenToWorld(e)];drawLasso();return}down={x:e.clientX,y:e.clientY,ex:ed.x,ey:ed.y,moved:false}}});
-  cv.addEventListener('pointermove',e=>{if(!ed.on||!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2){const m=mid();pinch={m,z:ed.z,ex:ed.x,ey:ed.y,w:screenToWorld({clientX:m.x,clientY:m.y})};down=null;
+      // a second finger means zoom: a stroke the first finger just began is dropped
+      const B=ed.brush;if(B.stroke){if(B.stroke.p.length<4)B.mask.s.splice(B.mask.s.indexOf(B.stroke),1);B.stroke=null;drawBrush();if(ed.onBrush)ed.onBrush()}}
+    else if(pts.size===1){const B=ed.brush;if(B.on){if(!B.mask)B.mask={s:[]};const w=screenToWorld(e);B.stroke={e:B.erase?1:0,r:Math.round(B.size*SS),p:[[Math.round(w[0]),Math.round(w[1])]]};B.mask.s.push(B.stroke);drawBrush();return}down={x:e.clientX,y:e.clientY,ex:ed.x,ey:ed.y,moved:false}}});
+  cv.addEventListener('pointerleave',()=>{if(cursorPt){cursorPt=null;drawBrush()}});
+  cv.addEventListener('pointermove',e=>{if(ed.on&&ed.brush.on&&e.pointerType==='mouse'){cursorPt=screenToWorld(e);if(!pts.size)drawBrush()}
+    if(!ed.on||!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     const rc=cv.getBoundingClientRect();
     if(pinch&&pts.size===2){const m=mid();ed.z=clamp(pinch.z*m.d/pinch.m.d,.8,8);
       ed.x=pinch.w[0]-((m.x-rc.left)/rc.width*view.W-view.W/2)/(viewFit()*ed.z);ed.y=pinch.w[1]-((m.y-rc.top)/rc.height*view.H-view.H/2)/(viewFit()*ed.z);return}
-    if(ed.lasso.pts){const w=screenToWorld(e),l=ed.lasso.pts[ed.lasso.pts.length-1];if(Math.hypot(w[0]-l[0],w[1]-l[1])>1.5*SS/ed.z){ed.lasso.pts.push(w);drawLasso()}return}
+    const S2=ed.brush.stroke;if(S2){const w=screenToWorld(e),l=S2.p[S2.p.length-1];if(Math.hypot(w[0]-l[0],w[1]-l[1])>Math.max(1.5*SS,S2.r*.25)){S2.p.push([Math.round(w[0]),Math.round(w[1])]);drawBrush()}return}
     if(!down)return;const dx=e.clientX-down.x,dy=e.clientY-down.y;if(Math.hypot(dx,dy)>(e.pointerType==='touch'?10:5))down.moved=true;if(down.moved){const k=view.W/rc.width/(viewFit()*ed.z);ed.x=down.ex-dx*k;ed.y=down.ey-dy*k}});
   const end=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null};
-  cv.addEventListener('pointercancel',e=>{end(e);down=null;if(ed.lasso.pts){ed.lasso.pts=null;drawLasso()}});
+  cv.addEventListener('pointercancel',e=>{end(e);down=null;if(ed.brush.stroke){ed.brush.stroke=null;drawBrush()}});
   cv.addEventListener('pointerup',e=>{const wasPinch=!!pinch;end(e);
-    // finishing a contour: it closes by itself; too short or too small ones are dropped
-    if(ed.lasso.pts){const p=ed.lasso.pts;ed.lasso.pts=null;drawLasso();let a=0;for(let k=0;k<p.length;k++){const q=p[k],r=p[(k+1)%p.length];a+=q[0]*r[1]-r[0]*q[1]}
-      if(!wasPinch&&p.length>=6&&Math.abs(a)/2>Math.pow(6*SS,2)&&ed.onLasso)ed.onLasso(p.map(q=>[Math.round(q[0]),Math.round(q[1])]));return}if(!ed.on||!down||wasPinch){if(!pts.size)down=null;return}const wasMove=down.moved;down=null;if(wasMove)return;
+    if(ed.brush.stroke){ed.brush.stroke=null;drawBrush();if(ed.onBrush)ed.onBrush();if(!pts.size)down=null;return}if(!ed.on||!down||wasPinch){if(!pts.size)down=null;return}const wasMove=down.moved;down=null;if(wasMove)return;
     if(e.pointerType==='touch'){const now=performance.now(),dbl=now-lastTap.t<300&&Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<30;lastTap={t:dbl?0:now,x:e.clientX,y:e.clientY};if(dbl){edFit();return}}
     const w=screenToWorld(e),z=pickZone(w[0],w[1]);
     if(ed.onTap&&!ed.seq&&ed.onTap(z,e))return;

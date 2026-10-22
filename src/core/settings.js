@@ -5,8 +5,9 @@ export const TOOLS={
     st:(l,d)=>({a:lerp(l.alpha,.95,d),wm:lerp(1,1.34,d),blur:0})},
   copic:{name:'Спиртовий маркер',sub:'мʼякий, без смуг',wMul:1.12,spacing:.62,outline:true,mat:{pat:.2,relief:.1,beer:1.2},wet:true,dry:.9,tooth:0,glitter:0,edge:0,
     st:(l,d)=>({a:lerp(l.alpha*.68,.9,d),wm:lerp(1.12,1.38,d),blur:.07})},
-  pencil:{name:'Кольорові олівці',sub:'зерниста штриховка',wMul:.6,spacing:.55,outline:true,mat:{pat:.3,relief:.55,tooth:1,toothScale:1.7},wet:false,dry:1.1,tooth:.95,glitter:0,edge:0,lines:4,
-    st:(l,d)=>({a:lerp(l.alpha*.6,.8,d),wm:1,blur:0})},
+  pencil:{name:'Кольорові олівці',sub:'зерниста штриховка',wMul:.6,spacing:.55,outline:true,mat:{pat:.25,relief:.15,tooth:1,toothScale:.32},wet:false,dry:0,tooth:.95,glitter:0,edge:0,lines:9,
+    // a pencil does not dry: every stroke is a band of thin streaks of pigment along the motion, final at once
+    st:l=>({a:Math.min(1,l.alpha*1.05),wm:1,blur:0})},
   watercolor:{name:'Акварель',sub:'мокрі мазки, прозорі шари',wMul:1.85,spacing:.8,outline:false,mat:{pat:0,relief:.5,gran:.3,rim:.6,beer:2.5},wet:true,dry:0,stamps:true,tooth:.12,glitter:0,edge:1,scribble:false,
     st:(l,d)=>({a:lerp(.42,.33,d)*(l.alpha/.76),wm:lerp(1.3,1.45,d),blur:lerp(.26,.12,d)})},
   pastel:{name:'Пастель',sub:'грубий фактурний мазок',wMul:1.2,spacing:.74,outline:false,mat:{pat:.35,relief:.85,tooth:1.25,toothScale:.75,chalk:1},wet:false,dry:.8,tooth:1.25,glitter:0,edge:0,rough:true,
@@ -42,7 +43,7 @@ export const FX_META=[['tilt','Tilt-shift на крупних'],['vig','Вінь
 export const U={patStr:.45,patScale:1,grain:.6};
 export const FLY={mode:'before',dur:3,count:3,zoomMul:1,segs:null};
 export const FLY_MOVES={auto:'Авто',in:'Наближення',out:'Віддалення',pan:'Панорама'};
-export const VS={on:true,dir:'ul',w:.26,dark:.3,style:'solid'};
+export const VS={on:false,dir:'ul',w:.26,dark:.3,style:'solid'};
 export const VS_DIRS={ul:[-1,-1],u:[0,-1],ur:[1,-1],r:[1,0],dr:[1,1],d:[0,1],dl:[-1,1],l:[-1,0]};
 export const FORMATS={'9x16':[1080,1920],'4x5':[1080,1350],'1x1':[1080,1080],'16x9':[1920,1080]};
 export const view={W:1080,H:1920,fmt:'9x16'};

@@ -108,7 +108,8 @@ export function drawLeg(ctx,l,r,f,st){
   if(st.blur>0)ctx.filter='blur('+(st.blur*r.w).toFixed(1)+'px)';
   const sd=noiseAt(l.p0[0]*.37,l.p1[1]*.53),n=T.lines||1,ox=r.bx,oy=r.by;
   const line=(o,a,lw)=>{ctx.globalAlpha=Math.min(1,a);ctx.lineWidth=lw;ctx.beginPath();legPath(ctx,l,Math.min(1,f),ox,oy,o);ctx.stroke()};
-  if(n>1){for(let j=0;j<n;j++){const h=(sd*(j+1)*7.31)%1;line(((j/(n-1))-.5)*r.w*.8+(h-.5)*r.w*.07,st.a*(.62+h*.45),r.w*l.wm*.36)}}
+  // dry media: the stroke is a band of fine streaks of uneven strength (the lead's grain), different on every stroke
+  if(n>1){const W=r.w*l.wm;for(let j=0;j<n;j++){const h=(sd*(j+1)*7.31)%1,h2=(sd*(j+3)*3.17+.37)%1;line(((j+.5)/n-.5)*W*.92+(h-.5)*W*.09,st.a*(.42+h2*.5),W*(.11+h*.08))}}
   else if(st.soft){const W0=r.w*l.wm*st.wm;line(0,.5,W0*(1+st.soft*1.6));line(0,.6,W0*(1+st.soft*.6));line(0,.9,W0*.7)}
   else line(0,st.a,r.w*l.wm*st.wm);
   if(T.rough){line((sd-.5)*r.w*.5,st.a*.5,r.w*l.wm*.45);line((.5-sd)*r.w*.35,st.a*.35,r.w*l.wm*.3)}

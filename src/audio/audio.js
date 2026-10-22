@@ -1,4 +1,4 @@
-import {BQ,SND_TOOLS,SR,nz,reverb,seedNoise,toolEvent} from './synth.js';
+import {BQ,CUR,SND_TOOLS,SR,nz,reverb,seedNoise,toolEvent,toolSnd} from './synth.js';
 import {plan,planVer} from '../core/plan.js';
 import {FLQ,OUT,S,TOOLS} from '../core/settings.js';
 import {$,SS,clamp,rngOf,sleep,vnA} from '../core/utils.js';
@@ -7,11 +7,11 @@ import {penState} from '../render/camera.js';
 import {GL} from '../render/glitter.js';
 import {outroSnd} from '../render/outro.js';
 import {busy,setBusy} from '../ui/playback.js';
-export const SND={on:true,vol:.8,strokes:1,events:.8,room:.4,reverb:.35,data:null,key:'',ctx:null,gain:null,src:null,buf:null,bufKey:'',startCtx:0,startT:0};
-export function sndKey(){return planVer+'|'+S.tool+'|'+[SND.strokes,SND.events,SND.room,SND.reverb,OUT.on,OUT.dur,OUT.text,OUT.style,FLQ.drops].join(',')}
+export const SND={on:true,vol:.8,strokes:1,events:.8,room:.4,reverb:.35,tools:{},data:null,key:'',ctx:null,gain:null,src:null,buf:null,bufKey:'',startCtx:0,startT:0};
+export function sndKey(){return planVer+'|'+S.tool+'|'+[SND.strokes,SND.events,SND.room,SND.reverb,OUT.on,OUT.dur,OUT.text,OUT.style,FLQ.drops].join(',')+'|'+JSON.stringify(SND.tools||{})}
 export async function genAudio(p,onProg){
   seedNoise((12345+S.seed*7919)|0||1);
-  const rnd=rngOf(777+S.seed),RCS={},getRC=t=>{if(!RCS[t]){const R=SND_TOOLS[t]||SND_TOOLS.marker;RCS[t]={R,st:R.init(rnd),kA:1-Math.exp(-1/(SR*R.att)),kR:1-Math.exp(-1/(SR*R.rel))}}return RCS[t]};
+  const rnd=rngOf(777+S.seed),RCS={},getRC=t=>{if(!RCS[t]){const R=SND_TOOLS[t]||SND_TOOLS.marker;RCS[t]={R,P:toolSnd(t),st:R.init(rnd),kA:1-Math.exp(-1/(SR*R.att)),kR:1-Math.exp(-1/(SR*R.rel))}}return RCS[t]};
   // control signals from the pen at 1 kHz
   const CR=1000,M=Math.ceil(p.total*CR)+2,px=new Float32Array(M),py=new Float32Array(M),con=new Uint8Array(M),lid=new Int32Array(M),spd=new Float32Array(M),gl=new Float32Array(M),gr=new Float32Array(M),pa=new Float32Array(M),tl=[];
   for(let j=0;j<M;j++){const v=Math.min(j/CR,p.total),st=(OUT.on&&p.mainTotal!=null&&v>p.mainTotal)?outroSnd(v-p.mainTotal):penState(p.cOf(v));px[j]=st.x;py[j]=st.y;con[j]=((st.kind==='run'||st.kind==='link'||st.kind==='trace')&&st.h<.05)||(st.drop&&st.kind==='pause')?1:0;lid[j]=st.kind==='trace'?-7:st.lid;tl[j]=st.tool||S.tool;
@@ -57,9 +57,9 @@ export async function genAudio(p,onProg){
      for(let j=a;j<b;j++){const u=(j-a)/Math.max(1,L);const sh=u<pk?Math.sin(Math.PI*.5*u/pk):Math.cos(Math.PI*.5*(u-pk)/(1-pk));
        let e=L<30?.55*Math.sin(Math.PI*u):floor+(1-floor)*Math.pow(Math.max(0,sh),.55);if(j-a<lift)e=0;
        gEnv[j]=e*(.82+.36*vnA(j/CR*3.1+gi*.37))*gGain[j];gSp[j]*=(.35+.65*e);gGain[j]=g;gId[j]=gi;gDet[j]=det*dk}
-     if(lift>0&&k===2){const tt=(a+lift)/CR,T0=getRC(tl[m]).R.tap;if(T0&&T0.amt>0){const am=T0.amt*(.12+rnd()*.12),f=T0.f*(.85+rnd()*.3),lp=new BQ('lp',3200,.7);
+     if(lift>0&&k===2){const tt=(a+lift)/CR,T0=getRC(tl[m]).R.tap;if(T0&&T0.amt>0){const am=T0.amt*(.12+rnd()*.12)*getRC(tl[m]).P.taps,f=T0.f*(.85+rnd()*.3),lp=new BQ('lp',3200,.7);
        put(tt,.05,pa[m],q=>{const x=q/SR;return (Math.sin(2*Math.PI*f*x)*Math.exp(-x/T0.dec)+lp.p(nz())*Math.exp(-x/.0015)*T0.click*.5)*am},SND.strokes)}}
-     const pq=SQ[tl[m]]||0;if(L>90&&rnd()<pq*(push?1.5:.6)){const t0=(a+L*(.15+rnd()*.5))/CR,dur=.045+rnd()*.12,f0=1700+rnd()*1700,gl=(rnd()-.5)*.35,am=(.12+rnd()*.2)*g;let ph=0,lpn=0;
+     const pq=(SQ[tl[m]]||0)*getRC(tl[m]).P.squeak;if(L>90&&rnd()<pq*(push?1.5:.6)){const t0=(a+L*(.15+rnd()*.5))/CR,dur=.045+rnd()*.12,f0=1700+rnd()*1700,gl=(rnd()-.5)*.35,am=(.12+rnd()*.2)*g;let ph=0,lpn=0;
        put(t0,dur,pa[m],q=>{const r=q/(dur*SR),f=f0*(1+gl*r)*(1+.012*Math.sin(q*.0021));ph+=2*Math.PI*f/SR;lpn+=(nz()-lpn)*.08;const w=Math.pow(Math.sin(Math.PI*Math.min(1,r)),1.6);
          return (Math.sin(ph)*.7+Math.sin(2*ph)*.22+Math.sin(3*ph)*.08)*w*am*(.65+.7*lpn)},SND.strokes)}})
    let sm=0,sn=0;for(let j=0;j<M;j++)if(con[j]){sm+=gEnv[j];sn++}const nrm=sn?Math.min(1.6,.92*sn/Math.max(1e-3,sm)):1;for(let j=0;j<M;j++)gEnv[j]*=nrm}
@@ -71,11 +71,11 @@ export async function genAudio(p,onProg){
     const rc=getRC(tl[j]);env+=(c-env)*(c>env?rc.kA:rc.kR);
     if(gId[j]!==lastLid){lastLid=gId[j];gT=gGain[j]}detT=gDet[j]*gTone[j];
     det+=(detT-det)*.004;gn+=(gT-gn)*.003;dist+=sp*norm/SR;
-    if(env>1e-4){const x=rc.R.proc(rc.st,env,sp,dist,det,i,i/SR)*gn*gE*SND.strokes;SL[i]=x*gl[j];SRt[i]=x*gr[j];if(env>.3){const lw=1/(rc.R.loud||1);ss+=x*x*lw*lw;sc++}}
+    if(env>1e-4){const P=rc.P;CUR.body=P.body;CUR.grain=P.grain;CUR.reso=P.reso;const k0=gn*gE,x=rc.R.proc(rc.st,env,sp,dist,det*P.tone,i,i/SR)*k0*P.vol*SND.strokes,xr=CUR.ref*k0;SL[i]=x*gl[j];SRt[i]=x*gr[j];if(env>.3){const lw=1/(rc.R.loud||1);ss+=xr*xr*lw*lw;sc++}}
     if((i&65535)===0&&onProg){onProg(i/N*.7);await sleep(0)}
   }
   // pen touch-downs
-  {let off=99;for(let j=1;j<M;j++){if(!con[j]){off++;continue}const T0=getRC(tl[j]).R.tap;if(T0.amt>0&&!con[j-1]&&off>40){const a=T0.amt*(.6+rnd()*.4)*clamp(off/400,.28,1),f=T0.f*(.9+rnd()*.2),lp=new BQ('lp',3500,.7);
+  {let off=99;for(let j=1;j<M;j++){if(!con[j]){off++;continue}const T0=getRC(tl[j]).R.tap;if(T0.amt>0&&!con[j-1]&&off>40){const a=T0.amt*(.6+rnd()*.4)*clamp(off/400,.28,1)*getRC(tl[j]).P.taps,f=T0.f*(.9+rnd()*.2),lp=new BQ('lp',3500,.7);
       put(j/CR,.06,pa[j],k=>{const q=k/SR;return (Math.sin(2*Math.PI*f*q)*Math.exp(-q/T0.dec)+lp.p(nz())*Math.exp(-q/.0015)*T0.click*.6)*a},SND.strokes)}off=0}}
   // cap / click / water events at colour changes
   const o=p.order.filter(r=>!r.instant),ev=[];
@@ -86,13 +86,13 @@ export async function genAudio(p,onProg){
     const L=o[o.length-1];ev.push({t:p.vOf(L.t1)+.12,type:'close',pan:panOf(L.legs[L.legs.length-1].p1[0]),tool:L.tool})}
   o.forEach(r=>{if(!TOOLS[r.tool].glue)return;const s0=r.t0+r.dur*r.sf,sd=r.dur*(1-r.sf),pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);const a=p.vOf(s0+sd*(GL.p0+.02)),b=p.vOf(s0+sd*(GL.p1+.04));ev.push({t:a,d:Math.max(.1,b-a),type:'pour',pan:pn,tool:r.tool});ev.push({t:p.vOf(s0+sd*(GL.t0+.01)),type:'tap',pan:pn,tool:r.tool})});
   if(FLQ.drops)o.forEach(r=>{if(!TOOLS[r.tool].fluid)return;const pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);ev.push({t:p.vOf(r.t0),type:'drip',pan:pn,tool:r.tool})});
-  ev.forEach(e=>toolEvent(put,e,rnd));
+  ev.forEach(e=>{const k=getRC(e.tool||S.tool).P.events;toolEvent((t,d,pn,gen,g)=>put(t,d,pn,gen,(g==null?SND.events:g)*k),e,rnd)});
   if(onProg){onProg(.78);await sleep(0)}
   // reverb on the dry mix
   const mid=new Float32Array(N);for(let n=0;n<N;n++)mid[n]=(SL[n]+SRt[n]+EL[n]+ER[n])*.5;
   const [wl,wr]=reverb(mid,N,SND.reverb*.9);
   if(onProg){onProg(.92);await sleep(0)}
-  const g=sc?.08/Math.sqrt(ss/sc):1,L=new Float32Array(N),R=new Float32Array(N);
+  const g=sc&&ss>1e-12?.08/Math.sqrt(ss/sc):1,L=new Float32Array(N),R=new Float32Array(N);
   const rl=new BQ('lp',380,.5),rh=new BQ('hp',55,.7),rl2=new BQ('lp',380,.5),rh2=new BQ('hp',55,.7),room=SND.room*.05;
   for(let n=0;n<N;n++){const m=room*(.6+.4*vnA(n/SR*.35+3));
     L[n]=Math.tanh((SL[n]+EL[n]+wl[n])*g*1.1)/1.1+rh.p(rl.p(nz()))*m;R[n]=Math.tanh((SRt[n]+ER[n]+wr[n])*g*1.1)/1.1+rh2.p(rl2.p(nz()))*m}

@@ -13,6 +13,7 @@ import {buildFxUI} from './controls.js';
 import {renderPal,setSegValue,updateInspector} from './inspector.js';
 import {setArt} from './load.js';
 import {T,busy,playing,rebuild,setPlayIcon,setPlaying} from './playback.js';
+import {syncSound} from './sound.js';
 /* ================= PROJECT (JSON + browser storage) ================= */
 export const LS_KEY='mcs.project.v1';export let lsTimer=0,lsOn=true,lsArmed=false;
 export function readURL(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
@@ -26,10 +27,10 @@ export async function setDeskImage(url,name,auto){
 export function projectData(img){
   const pick=(o,ks)=>{const r={};ks.forEach(k=>r[k]=o[k]);return r};
   return{app:'marker-coloring-studio',v:1,saved:new Date().toISOString(),
-    art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null}),
+    art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null,masks:art.masks&&art.masks.length?art.masks:null}),
     S:{camMode:S.camMode,tool:S.tool,duration:S.duration,montage:S.montage,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
     U:Object.assign({},U),PUFF:Object.assign({},PUFF),DUO:Object.assign({},DUO),GLT:Object.assign({},GLT),IMP:Object.assign({},IMP),SHADE:Object.assign({},SHADE),
-    SND:pick(SND,['on','vol','strokes','events','room','reverb']),FLY:JSON.parse(JSON.stringify(FLY)),
+    SND:Object.assign(pick(SND,['on','vol','strokes','events','room','reverb']),{tools:JSON.parse(JSON.stringify(SND.tools||{}))}),FLY:JSON.parse(JSON.stringify(FLY)),
     desk:Object.assign(pick(DESK,['mode','scale','bright','blur','tint']),{img:img?DESK.src||null:null}),
     VS:Object.assign({},VS),FLQ:{prev:FLQ.prev,render:FLQ.render,mix:FLQ.mix,blooms:FLQ.blooms,drops:FLQ.drops,cine:FLQ.cine,gloss:FLQ.gloss},pattern:img?PATTERN_SRC:null,fmt:view.fmt,fps:$('fps').value,res:$('res').value,vfmt:$('vfmt').value,OUT:Object.assign({},OUT),
     order:{custom:customOrder,mode:orderMode},palette:palette.slice(),
@@ -46,7 +47,7 @@ export function syncUI(){
   setv('pstr',U.patStr,(+U.patStr).toFixed(2),'pstrV');setv('pscl',U.patScale,(+U.patScale).toFixed(1)+'×','psclV');setv('grain',U.grain,(+U.grain).toFixed(2),'grainV');
   setSegValue('deskMode',DESK.mode);setSegValue('camMode',S.camMode||'montage');setv('deskScale',DESK.scale,(+DESK.scale).toFixed(1)+'×','deskScaleV');setv('deskBright',DESK.bright,(+DESK.bright).toFixed(2),'deskBrightV');setv('deskBlur',DESK.blur,(+DESK.blur).toFixed(1),'deskBlurV');setv('deskTint',DESK.tint);
   setv('sndOn',SND.on);$('sndBadge').textContent=SND.on?'ASMR':'вимк.';setv('sndVol',SND.vol,Math.round(SND.vol*100),'sndVolV');
-  [['sndStrokes','strokes'],['sndEvents','events'],['sndRoom','room'],['sndRev','reverb']].forEach(([id,k])=>setv(id,SND[k],Math.round(SND[k]*100),id+'V'));
+  [['sndStrokes','strokes'],['sndEvents','events'],['sndRoom','room'],['sndRev','reverb']].forEach(([id,k])=>setv(id,SND[k],Math.round(SND[k]*100),id+'V'));if(!SND.tools)SND.tools={};syncSound();
   setSegValue('flyMode',FLY.mode);setv('flyDur',FLY.dur,(+FLY.dur).toFixed(1)+' с','flyDurV');setv('flyCount',FLY.count,FLY.count,'flyCountV');setv('flyZoom',FLY.zoomMul,'×'+(+FLY.zoomMul).toFixed(2),'flyZoomV');
   setv('impColors',IMP.useColors);setv('impThr',IMP.thr,(+IMP.thr).toFixed(2),'impThrV');setv('impShade',SHADE.on);setv('impWhen',SHADE.when);
   setv('puffRel',PUFF.ns,PUFF.ns,'puffRelV');setv('puffGloss',PUFF.gloss,(+PUFF.gloss).toFixed(2),'puffGlossV');
@@ -73,7 +74,7 @@ export async function applyProject(d){
   if(d.art&&d.art.demo)a=buildDemo();
   else if(d.art&&d.art.src){const im=await loadImg(d.art.src);a=loadArtFromImage(im);a.srcURL=d.art.src}
   else throw new Error('noimg');
-  if(d.art&&d.art.walls)a.walls=d.art.walls;
+  if(d.art&&d.art.walls)a.walls=d.art.walls;if(d.art&&d.art.masks)a.masks=d.art.masks;
   const refIm=d.art&&d.art.ref?await loadImg(d.art.ref):null;
   await new Promise(res=>setArt(a,false,()=>{
     if(refIm){applySrcColors(refIm);art.refURL=d.art.ref}
@@ -88,13 +89,19 @@ export async function applyProject(d){
 let idbP=null;
 function idb(){return idbP||(idbP=new Promise((res,rej)=>{const r=indexedDB.open('mcs',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))}
 async function idbDo(mode,fn){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction('kv',mode),q=fn(t.objectStore('kv'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
-export async function lsRead(){try{const d=await idbDo('readonly',st=>st.get(LS_KEY));if(d)return d}catch(e){}try{const t=localStorage.getItem(LS_KEY);return t?JSON.parse(t):null}catch(e){return null}}
-export async function lsClearAll(){try{await idbDo('readwrite',st=>st.delete(LS_KEY))}catch(e){}try{localStorage.removeItem(LS_KEY)}catch(e){}}
+/* the saved project; a newer settings-only snapshot written while the page was closing wins, with the pictures
+   taken from the full save */
+export async function lsRead(){let d=null,p=null;try{d=await idbDo('readonly',st=>st.get(LS_KEY))}catch(e){}
+  if(!d){try{const t=localStorage.getItem(LS_KEY);d=t?JSON.parse(t):null}catch(e){}}
+  try{const t=localStorage.getItem(LS_KEY+'.pending');p=t?JSON.parse(t):null}catch(e){}
+  if(!p||(d&&d.saved>=p.saved))return d;if(!d)return p.art&&(p.art.demo||p.art.src)?p:null;
+  if(d.art&&!p.art.demo){p.art.src=d.art.src;p.art.ref=d.art.ref}if(p.desk&&d.desk&&!p.desk.img)p.desk.img=d.desk.img;if(!p.pattern)p.pattern=d.pattern;return p}
+export async function lsClearAll(){try{await idbDo('readwrite',st=>st.delete(LS_KEY))}catch(e){}try{localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_KEY+'.pending')}catch(e){}}
 export function lsArm(){lsArmed=true}
 export async function lsSave(){
   lsTimer=0;if(!lsOn||!lsArmed||!seg||busy)return;
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});let note='з картинками';
-  try{await idbDo('readwrite',st=>st.put(projectData(true),LS_KEY));try{localStorage.removeItem(LS_KEY)}catch(e){}}
+  try{await idbDo('readwrite',st=>st.put(projectData(true),LS_KEY));try{localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_KEY+'.pending')}catch(e){}}
   catch(e){try{try{localStorage.setItem(LS_KEY,JSON.stringify(projectData(true)))}catch(e2){localStorage.setItem(LS_KEY,JSON.stringify(projectData(false)));note='без картинок: забагато для браузера, для повної копії збережіть .json'}}
     catch(e3){$('lsInfo').textContent='Браузер не дозволяє зберігати дані на цій сторінці. Користуйтеся збереженням .json.';return}}
   $('lsInfo').textContent='Автозбережено о '+t+', '+note+'.';$('lsRestore').hidden=$('lsClear').hidden=false;
@@ -103,7 +110,8 @@ export function lsSchedule(){if(!lsOn||!lsArmed)return;clearTimeout(lsTimer);lsT
 export function lsInit(){
   try{const a=localStorage.getItem(LS_KEY+'.auto');if(a==='0'){lsOn=false;$('lsAuto').checked=false}}catch(e){}
   // leaving the page (closing the tab, switching apps on a phone) saves pending changes at once
-  const flush=()=>{if(lsTimer){clearTimeout(lsTimer);lsSave()}};
+  // the IndexedDB write may not finish while the page closes, so the settings also go synchronously to localStorage
+  const flush=()=>{if(!lsTimer)return;clearTimeout(lsTimer);if(lsOn&&lsArmed&&seg&&!busy){try{localStorage.setItem(LS_KEY+'.pending',JSON.stringify(projectData(false)))}catch(e){}}lsSave()};
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush()});window.addEventListener('pagehide',flush);
 }
 /* On start: the last autosaved project opens by itself; without one (or if it cannot be read) the demo loads. */

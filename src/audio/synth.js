@@ -1,3 +1,4 @@
+import {SND} from './audio.js';
 import {S} from '../core/settings.js';
 import {TAU,vnA} from '../core/utils.js';
 export const SR=48000;
@@ -11,6 +12,17 @@ BQ.prototype.p=function(x){const y=this.b0*x+this.b1*this.x1+this.b2*this.x2-thi
 /* paper-tooth crackle: grains fire per distance travelled, so a faster hand crackles faster */
 export function Crackle(f,Q,dec,dens,prob){this.bp=new BQ('bp',f,Q);this.k=Math.exp(-1/(SR*dec));this.e=0;this.cell=0;this.dens=dens;this.prob=prob}
 Crackle.prototype.p=function(d,amt){const c=Math.floor(d*this.dens);if(c!==this.cell){this.cell=c;if(u01()<this.prob)this.e=Math.max(this.e,(.3+.7*u01())*amt)}this.e*=this.k;return this.bp.p(nz()*this.e)};
+/* Each tool's stroke sound is a mix of up to three parts: 'body' (the rustle of the tip on paper), 'grain'
+   (crackle of the paper tooth / ball / smacks) and 'reso' (narrow resonance: the gel pen's bubbling, squelching
+   paint, drops, bubbles). CUR holds the current tool's part levels; CUR.ref is the unscaled sum, used to keep the
+   overall loudness normalisation independent of what the user turned down. */
+export const CUR={body:1,grain:1,reso:1,ref:0};
+const mix=(B,G,Q)=>{CUR.ref=B+G+Q;return B*CUR.body+G*CUR.grain+Q*CUR.reso};
+export const SND_PART_DEF={vol:1,tone:1,body:1,grain:1,reso:1,squeak:1,events:1,taps:1};
+/* which parts a tool has, with their names; 'squeak' = the short squeaks of a felt/rubber tip */
+export const SND_META={marker:{squeak:true},chameleon:{squeak:true},copic:{squeak:true},pencil:{grain:'Тріск грифеля'},watercolor:{reso:'Краплі й плюскіт'},
+  pastel:{grain:'Тріск пастелі'},gel:{grain:'Шкрябання кульки',reso:'Булькання',squeak:true},puffy:{reso:'Чвакання фарби',squeak:true},glue:{reso:'Чвакання клею',squeak:true},
+  liquid:{grain:'Чвакання',reso:'Булькання'}};
 export const SND_TOOLS={
   chameleon:null,
   marker:{att:.006,rel:.03,tap:{f:190,dec:.016,click:.55,amt:.5},
@@ -18,40 +30,40 @@ export const SND_TOOLS={
     proc(s,e,sp,d,det,i,t){if((i&63)===0){s.a.set(2400*det*(.82+.36*sp));s.b.set(5000*det*(.9+.24*sp));s.sq.set(s.sqf*det*(.96+.1*sp))}
       const n=nz(),tm=.55+.9*vnA(d*.75);let o=(s.a.p(n)+s.b.p(n)*.4)*tm;
       
-      return o*e*(.1+.9*Math.pow(sp,.8))}},
+      return mix(o*e*(.1+.9*Math.pow(sp,.8)),0,0)}},
   copic:{att:.008,rel:.04,tap:{f:160,dec:.02,click:.35,amt:.4},
     init(){return{a:new BQ('bp',1700,.7),b:new BQ('bp',3600,.9),lp:new BQ('lp',6500,.7)}},
-    proc(s,e,sp,d,det,i){if((i&63)===0){s.a.set(1650*det*(.85+.3*sp));s.b.set(3500*det*(.9+.25*sp))}const n=nz(),tm=.78+.44*vnA(d*.4);return s.lp.p(s.a.p(n)+s.b.p(n)*.25)*tm*e*(.08+.92*Math.pow(sp,.7))}},
+    proc(s,e,sp,d,det,i){if((i&63)===0){s.a.set(1650*det*(.85+.3*sp));s.b.set(3500*det*(.9+.25*sp))}const n=nz(),tm=.78+.44*vnA(d*.4);return mix(s.lp.p(s.a.p(n)+s.b.p(n)*.25)*tm*e*(.08+.92*Math.pow(sp,.7)),0,0)}},
   pencil:{att:.004,rel:.02,tap:{f:430,dec:.011,click:1,amt:.55},
     init(){return{h:new BQ('hp',2600,.7),body:new BQ('bp',1100,.8),cr:new Crackle(3900,1.2,.0008,1.7,.55)}},
     proc(s,e,sp,d,det,i){if((i&63)===0){s.h.set(2500*det);s.body.set(1050*det)}const n=nz(),tm=.35+1.3*vnA(d*2.3),a=.15+.85*Math.pow(sp,.7);
-      return (s.h.p(n)*.55*tm+s.body.p(n)*.22)*e*a+s.cr.p(d,e*a)*2.2}},
+      return mix((s.h.p(n)*.55*tm+s.body.p(n)*.22)*e*a,s.cr.p(d,e*a)*2.2,0)}},
   watercolor:{att:.02,rel:.07,tap:{f:120,dec:.03,click:.08,amt:.15},
     init(){return{l:new BQ('lp',900,.5),b:new BQ('bp',2300,.7),pla:0,plf:0,plp:0,pln:0}},
     proc(s,e,sp,d,det,i,t){if((i&63)===0){s.l.set((550+800*sp)*det);s.b.set(2200*det)}
       const n=nz(),tm=.7+.6*vnA(t*2.3+9);let o=(s.l.p(n)*1.1+s.b.p(n)*.16)*tm*e*(.06+.94*Math.pow(sp,.9));
       if(e>.3&&u01()<1.6*sp/SR){s.pla=.06+.08*u01();s.plf=800+900*u01();s.pln=0}
-      if(s.pla>1e-4){s.pln++;const f=s.plf*(1+Math.min(1.2,s.pln/SR*60));s.plp+=2*Math.PI*f/SR;o+=Math.sin(s.plp)*s.pla;s.pla*=.9986}
-      return o}},
+      let q=0;if(s.pla>1e-4){s.pln++;const f=s.plf*(1+Math.min(1.2,s.pln/SR*60));s.plp+=2*Math.PI*f/SR;q=Math.sin(s.plp)*s.pla;s.pla*=.9986}
+      return mix(o,0,q)}},
   pastel:{att:.006,rel:.03,tap:{f:230,dec:.024,click:.55,amt:.5},
     init(){return{a:new BQ('bp',1300,.6),rum:new BQ('lp',240,.7),cr:new Crackle(1900,1,.0016,1.1,.5)}},
     proc(s,e,sp,d,det,i){if((i&63)===0)s.a.set(1250*det*(.85+.3*sp));const n=nz(),tm=.45+1.1*vnA(d*1.1),a=.12+.88*Math.pow(sp,.75);
-      return (s.a.p(n)*.75*tm+s.rum.p(n)*.5*sp)*e*a+s.cr.p(d,e*a)*1.6}},
+      return mix((s.a.p(n)*.75*tm+s.rum.p(n)*.5*sp)*e*a,s.cr.p(d,e*a)*1.6,0)}},
   gel:{att:.005,rel:.025,tap:{f:320,dec:.012,click:.8,amt:.4},
-    init(){return{a:new BQ('bp',950,2.5),h:new BQ('hp',5200,.7),cr:new Crackle(6500,1.5,.0005,.7,.32)}},
-    proc(s,e,sp,d,det,i){if((i&63)===0)s.a.set(950*det*(.9+.25*sp));const n=nz(),a=.1+.9*Math.pow(sp,.8);
-      return (s.a.p(n)*.8+s.h.p(n)*.12)*e*a+s.cr.p(d,e*a)*.9}},
+    init(){return{a:new BQ('bp',950,2.5),h:new BQ('hp',5200,.7),m:new BQ('bp',2300,.6),cr:new Crackle(6500,1.5,.0005,.7,.32)}},
+    proc(s,e,sp,d,det,i){if((i&63)===0){s.a.set(950*det*(.9+.25*sp));s.m.set(2300*det)}const n=nz(),a=.1+.9*Math.pow(sp,.8);
+      return mix((s.h.p(n)*.12+s.m.p(n)*.22)*e*a,s.cr.p(d,e*a)*.9,s.a.p(n)*.8*e*a)}},
   puffy:{att:.012,rel:.05,tap:{f:140,dec:.03,click:.2,amt:.3},
     init(){return{l:new BQ('lp',650,.7),b:new BQ('bp',1400,1.2),sq:new BQ('bp',900,5),cr:new Crackle(1200,1.5,.003,.35,.4)}},
     proc(s,e,sp,d,det,i){if((i&63)===0){s.l.set((450+500*sp)*det);s.b.set(1300*det)}const n=nz(),a=.08+.92*Math.pow(sp,.8),tm=.7+.6*vnA(d*.3);
-      return (s.l.p(n)+s.b.p(n)*.25)*e*a*tm+s.sq.p(s.cr.p(d,e*a)*4)*1.2}},
+      return mix((s.l.p(n)+s.b.p(n)*.25)*e*a*tm,0,s.sq.p(s.cr.p(d,e*a)*4)*1.2)}},
   glue:{att:.015,rel:.05,tap:{f:150,dec:.025,click:.15,amt:.22},
     init(){return{l:new BQ('lp',600,.7),b:new BQ('bp',1300,1.4),sq:new BQ('bp',800,6),cr:new Crackle(1100,1.5,.003,.3,.35)}},
     proc(s,e,sp,d,det,i){if((i&63)===0){s.l.set((420+450*sp)*det);s.b.set(1250*det)}const n=nz(),a=.08+.92*Math.pow(sp,.8),tm=.7+.6*vnA(d*.3);
-      return ((s.l.p(n)+s.b.p(n)*.2)*e*a*tm+s.sq.p(s.cr.p(d,e*a)*4)*1.1)*.75}},
+      return mix((s.l.p(n)+s.b.p(n)*.2)*e*a*tm*.75,0,s.sq.p(s.cr.p(d,e*a)*4)*1.1*.75)}},
   airbrush:{att:.05,rel:.12,tap:{amt:0},
     init(){return{h:new BQ('hp',450,.7),l:new BQ('lp',8500,.7)}},
-    proc(s,e,sp,d,det,i,t){return s.l.p(s.h.p(nz()))*.55*e*(1+.07*Math.sin(2*Math.PI*17.3*t))*(.85+.15*sp)}}
+    proc(s,e,sp,d,det,i,t){return mix(s.l.p(s.h.p(nz()))*.55*e*(1+.07*Math.sin(2*Math.PI*17.3*t))*(.85+.15*sp),0,0)}}
 };
 SND_TOOLS.chameleon=SND_TOOLS.marker;/* one bubble after van den Doel: Minnaert pitch from its radius, physical damping, slight upward chirp as it
    rises, sharp onset. Radii follow a power law, so many tiny ticks and only a few deeper blips. */
@@ -61,13 +73,13 @@ export function bubbleTick(B){const q=B.k/SR,f=B.f0*(1+B.sg*q);B.ph+=TAU*f/SR;B.
 SND_TOOLS.liquid={loud:.5,att:.05,rel:.22,tap:{f:600,dec:.02,click:0,amt:0},
   init(){return{b:[],lp:new BQ('lp',230,.6),sm:[],bp:new BQ('bp',750,1.1)}},
   // wet paint moving: clusters of tiny bubbles (gurgle), rare deeper blips, little viscous 'smacks', a faint low body
-  proc(s,e,sp,d,det,i,t){let o=s.lp.p(nz())*.05*e*(.4+.6*vnA(t*1.3+5));
+  proc(s,e,sp,d,det,i,t){const o=s.lp.p(nz())*.05*e*(.4+.6*vnA(t*1.3+5));let q=0;
     const burst=Math.pow(vnA(t*2.6+11),2.2)*2.4,rate=e*(2+20*Math.min(1.3,sp))*burst;
     if(s.b.length<10&&u01()<rate/SR){const B=bubbleParams(u01,1);B.f0*=det;s.b.push(B)}
-    for(let j=s.b.length-1;j>=0;j--){const B=s.b[j];o+=bubbleTick(B);if(B.k>SR*7/B.d)s.b.splice(j,1)}
+    for(let j=s.b.length-1;j>=0;j--){const B=s.b[j];q+=bubbleTick(B);if(B.k>SR*7/B.d)s.b.splice(j,1)}
     if(u01()<e*(1.5+5*Math.min(1,sp))/SR)s.sm.push({k:0,a:.06+.08*u01(),dc:.003+.005*u01()});
-    let sx=0;for(let j=s.sm.length-1;j>=0;j--){const M=s.sm[j],q=M.k/SR;sx+=nz()*M.a*Math.exp(-q/M.dc);M.k++;if(q>M.dc*6)s.sm.splice(j,1)}o+=s.bp.p(sx);
-    return o}};
+    let sx=0;for(let j=s.sm.length-1;j>=0;j--){const M=s.sm[j],qq=M.k/SR;sx+=nz()*M.a*Math.exp(-qq/M.dc);M.k++;if(qq>M.dc*6)s.sm.splice(j,1)}
+    return mix(o,s.bp.p(sx),q)}};
 /* one-shot sounds */
 export function evSnap(put,t,pan,amp,f){const bp=new BQ('bp',f,2.2);put(t,.03,pan,k=>{const a=k/SR;return bp.p(nz()*Math.exp(-a/.0011))*amp*3+Math.sin(2*Math.PI*f*.3*a)*Math.exp(-a/.006)*amp*.35})}
 export function evSlide(put,t,pan,amp,dur,f){const bp=new BQ('bp',f,.9);put(t,dur,pan,k=>bp.p(nz())*amp*Math.sin(Math.PI*k/SR/dur))}
@@ -114,3 +126,5 @@ export function reverb(inp,N,wet){
   return[outL,outR];
 }
 export function seedNoise(v){nsd=v}
+/* the sound settings of a tool, defaults filled in */
+export function toolSnd(t){return Object.assign({},SND_PART_DEF,SND.tools&&SND.tools[t])}

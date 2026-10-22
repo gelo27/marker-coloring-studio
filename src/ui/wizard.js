@@ -1,27 +1,29 @@
 import {SND} from '../audio/audio.js';
-import {extractLines,loadArtFromImage} from '../core/segment.js';
+import {drawMask,extractLines,loadArtFromImage} from '../core/segment.js';
 import {IMP,OUT,PREV,S,SHADE,TOOLS,isMobileUI,view} from '../core/settings.js';
-import {$,clamp} from '../core/utils.js';
+import {$,clamp,mk} from '../core/utils.js';
 import {GROUP_RULES,applyPalette,applySrcColors,art,colorGroups,groupedOrder,nextPalSeed,orderFromGroups,orderMode,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setZoneColor,zoneByI,zones} from '../core/zones.js';
 import {buildDemo} from '../data/demoArt.js';
-import {ed} from '../editor/editor.js';
+import {drawBrush,ed} from '../editor/editor.js';
 import {ic} from './controls.js';
 import {estimateExport,exportVideo} from './exporter.js';
 import {addToPalette,makeSwatch,selZones,setOrder,setSegValue,setSegValue2,updateInspector,zonesChanged} from './inspector.js';
 import {resegment,setArt} from './load.js';
 import {busy,setMode} from './playback.js';
 import {applyProject,loadImg,lsArm,readURL} from './project.js';
+import {bindSoundStep,syncSound} from './sound.js';
+import {fillToolThumbs} from './toolThumbs.js';
 /* ================= STEP-BY-STEP MODE =================
    Six steps for a casual user: picture → check the zones → colours (tap to paint) → order (colour groups) →
    camera & speed (tap a setting onto zones) → video. Every control drives the same state as the full settings panel. */
 export const WZ={step:1,brush:'#ff8fab',tag:{k:'close',v:'on'},undo:[]};
-const STEPS=6;
+const STEPS=7;
 const zonesWord=n=>n+(n%10===1&&n%100!==11?' зона':n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?' зони':' зон');
 /* ---------- files: picture or project, from the drop zone, a picker or drag & drop anywhere ---------- */
 export async function openFile(f){
   if(!f||busy)return;
   if(/\.json$/i.test(f.name)||f.type==='application/json'){
-    try{await applyProject(JSON.parse(await f.text()));$('lsInfo').textContent='Відкрито проєкт «'+f.name+'».';lsArm();gotoStep(6)}catch(err){$('wArtInfo').textContent='Не вдалося відкрити файл: це не проєкт студії або він пошкоджений.'}
+    try{await applyProject(JSON.parse(await f.text()));$('lsInfo').textContent='Відкрито проєкт «'+f.name+'».';lsArm();gotoStep(7)}catch(err){$('wArtInfo').textContent='Не вдалося відкрити файл: це не проєкт студії або він пошкоджений.'}
     return}
   if(!/^image\//.test(f.type)){$('wArtInfo').textContent='Це не картинка. Підійдуть PNG, JPG або WebP.';return}
   const url=await readURL(f),img=await loadImg(url),a=loadArtFromImage(img);a.srcURL=url;lsArm();
@@ -46,7 +48,7 @@ export function gotoStep(n){
   document.querySelectorAll('#wiz .step').forEach(s=>s.hidden=+s.dataset.step!==n);
   [...$('steps').children].forEach(b=>{const k=+b.dataset.s;b.setAttribute('aria-current',k===n?'step':'false');b.classList.toggle('done',k<n)});
   $('wPrev').hidden=n===1;$('wNext').hidden=n===STEPS;$('wStepN').textContent=n+' / '+STEPS;
-  if(n!==2&&ed.lasso.on){ed.lasso.on=false;ed.lasso.pts=null}
+  if(n!==2&&ed.brush.on){ed.brush.on=false;ed.brush.mask=null;ed.brush.stroke=null}
   if(seg){
     if(n===2)enterEditor($('wZoneView').querySelector('[aria-pressed="true"]')?.dataset.v||'map',null);
     else if(n===3){ed.sel.clear();if(WZ.brush!=null&&palette.length&&!palette.some(c=>c.toLowerCase()===WZ.brush.toLowerCase()))WZ.brush=palette[0];enterEditor('final',paintTap)}
@@ -113,13 +115,14 @@ function syncExport(){['res','fps','vq'].forEach(k=>{$('w'+k[0].toUpperCase()+k.
 export function syncWizard(){
   if(!$('wiz'))return;const n=WZ.step;
   setSegValue('wFormats',view.fmt);
-  if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=S.duration+' с';$('wTool').value=S.tool}
-  else if(n===2){zoneStats();if(WZ.lassoUI)WZ.lassoUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
+  if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=S.duration+' с';[...$('wToolGrid').children].forEach(b=>b.setAttribute('aria-checked',String(b.dataset.t===S.tool)))}
+  else if(n===2){zoneStats();if(WZ.maskUI)WZ.maskUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
     $('wMinArea').value=IMP.minArea;$('wMinAreaV').textContent=IMP.minArea;setSegValue('wZoneView',ed.view==='final'?'final':'map')}
   else if(n===3){renderWPal();$('wShadeRow').hidden=!(art&&art.colored);$('wShade').checked=SHADE.on;$('wUndo').disabled=!WZ.undo.length}
   else if(n===4){$('wGroupRule').value=$('wGroupRule').value||'light';syncOrderUI()}
   else if(n===5)syncCam();
-  else if(n===6)syncExport();
+  else if(n===6)syncSound();
+  else if(n===7)syncExport();
 }
 export function syncWizardSel(){const box=$('wZoneSel');if(!box)return;const sel=selZones();box.hidden=WZ.step!==2||!sel.length;if(box.hidden)return;const z=sel[0];
   $('wSelDot').style.background=z.skip?'transparent':z.color;$('wSelName').textContent=sel.length===1?'Зона #'+z.i+' · '+(z.r.area/pageArea()*100).toFixed(z.r.area/pageArea()<.01?2:1)+'%':sel.length+' зон';
@@ -130,7 +133,7 @@ export function setUiMode(m){setSegValue('uiMode',m);const ab=$('steps').querySe
 export function bindWizard(onPreview){
   bindDrop();
   // the step bar (a bottom tab bar on phones): the last tab opens all settings
-  [['1','image'],['2','zones'],['3','palette'],['4','list'],['5','video'],['6','film'],['adv','sliders']].forEach(([k,i])=>{const b=$('steps').querySelector('[data-s="'+k+'"]');if(b)b.insertAdjacentHTML('afterbegin',ic(i))});
+  [['1','image'],['2','zones'],['3','palette'],['4','list'],['5','video'],['6','sound'],['7','film'],['adv','sliders']].forEach(([k,i])=>{const b=$('steps').querySelector('[data-s="'+k+'"]');if(b)b.insertAdjacentHTML('afterbegin',ic(i))});
   $('steps').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.s==='adv'){setUiMode('adv');return}const n=+b.dataset.s;if($('wiz').hidden){WZ.step=n;setUiMode('wiz')}else gotoStep(n)};
   $('wPrev').onclick=()=>gotoStep(WZ.step-1);$('wNext').onclick=()=>gotoStep(WZ.step+1);
   $('uiMode').onclick=e=>{const b=e.target.closest('button');if(b)setUiMode(b.dataset.v)};
@@ -139,8 +142,10 @@ export function bindWizard(onPreview){
   $('wDemo').onclick=()=>{if(busy)return;setArt(buildDemo(),false,()=>{$('wArtInfo').textContent='Демо: ведмежа на капкейку. Далі — перевірка зон.'})};
   $('wFormats').onclick=e=>{const b=e.target.closest('button');if(b)$('formats').querySelector('[data-f="'+b.dataset.f+'"]').click();syncWizard()};
   $('wDur').oninput=e=>{$('wDurV').textContent=e.target.value+' с'};$('wDur').onchange=e=>{$('dur').value=e.target.value;$('dur').dispatchEvent(new Event('change'))};
-  $('wTool').innerHTML=Object.keys(TOOLS).map(k=>'<option value="'+k+'">'+TOOLS[k].name+'</option>').join('');
-  $('wTool').onchange=e=>{const b=$('toolSeg').querySelector('[data-t="'+e.target.value+'"]');if(b)b.click()};
+  // tool tiles with square previews; they drive the tool buttons of the full settings
+  $('wToolGrid').innerHTML=Object.keys(TOOLS).map(k=>'<button role="radio" data-t="'+k+'" aria-checked="false" title="'+TOOLS[k].sub+'"><img class="tthumb" data-tool-thumb="'+k+'" alt="" width="96" height="96"><b>'+TOOLS[k].name+'</b></button>').join('');
+  $('wToolGrid').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;const t=$('toolSeg').querySelector('[data-t="'+b.dataset.t+'"]');if(t)t.click();syncWizard()};
+  fillToolThumbs();
   // step 2
   $('wZoneView').onclick=e=>{const b=e.target.closest('button');if(!b)return;setSegValue('wZoneView',b.dataset.v);enterEditor(b.dataset.v,null)};
   $('wLineK').oninput=e=>{$('wLineKV').textContent=(+e.target.value).toFixed(2)};
@@ -148,19 +153,25 @@ export function bindWizard(onPreview){
   $('wReseg').onclick=()=>{if(!art||busy)return;const v=+$('wLineK').value;IMP.minArea=+$('wMinArea').value;
     if(art.colored){IMP.thr=v;$('impThr').value=v;$('impThrV').textContent=v.toFixed(2);art.lineCv=extractLines(art.srcCv,IMP.thr)}else IMP.lineK=v;
     setArt(art,true,()=>gotoStep(2))};
-  // contours for zones the outline did not close
-  const lassoUI=()=>{const n=art&&art.walls?art.walls.length:0;$('wLasso').textContent=ed.lasso.on?'Готово':n?'Обвести ще':'Обвести зону';$('wLasso').classList.toggle('active',ed.lasso.on);$('wLassoUndo').disabled=!n;$('wLassoClear').disabled=!n;
-    if(ed.on)$('modeHint').textContent=ed.lasso.on?'Обведіть ділянку й відпустіть — контур замкнеться сам · два пальці — масштаб':HINTS[2]};
-  WZ.lassoUI=lassoUI;
-  $('wLasso').onclick=()=>{if(!seg||busy)return;if(!ed.on)enterEditor('map',null);ed.lasso.on=!ed.lasso.on;lassoUI()};
-  ed.onLasso=pts=>{art.walls=(art.walls||[]).concat([pts]);ed.lasso.on=false;lassoUI();
-    resegment(()=>{const inPoly=(x,y)=>{let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const a=pts[i],b=pts[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
-      const hit=zones.filter(z=>inPoly(z.r.cx,z.r.cy)).sort((a,b)=>b.r.area-a.r.area)[0];
-      if(hit){ed.sel=new Set([hit.i]);ed.dirtySel=true;updateInspector();$('wLassoHint').textContent='Готово: обведене стало зоною #'+hit.i+'. Її колір і налаштування можна змінити на наступних кроках.'}
-      else $('wLassoHint').textContent='Усередині контуру не вийшло окремої зони: обведіть ділянку ширше, уздовж ліній малюнка.';
-      lassoUI()})};
-  $('wLassoUndo').onclick=()=>{if(!art||!art.walls||!art.walls.length||busy)return;art.walls=art.walls.slice(0,-1);resegment(lassoUI)};
-  $('wLassoClear').onclick=()=>{if(!art||!art.walls||!art.walls.length||busy)return;art.walls=[];resegment(lassoUI)};
+  // zones the outline did not separate: paint them with a brush (any number of strokes), then turn the paint into a zone
+  const maskUI=()=>{const B=ed.brush,nm=art&&art.masks?art.masks.length:0,nw=art&&art.walls?art.walls.length:0;$('wBrushBox').hidden=!B.on;$('wBrush').hidden=B.on;
+    $('wMaskUndo').disabled=!nm||B.on;$('wMaskClear').disabled=!(nm+nw)||B.on;$('wBrushApply').disabled=!(B.mask&&B.mask.s.some(q=>!q.e));$('wBrushUndo').disabled=!(B.mask&&B.mask.s.length);
+    setSegValue('wBrushMode',B.erase?'erase':'paint');if(ed.on)$('modeHint').textContent=B.on?'Замальовуйте ділянку · гумка підправляє краї · два пальці — масштаб':HINTS[2]};
+  WZ.maskUI=maskUI;ed.onBrush=maskUI;
+  $('wBrush').onclick=()=>{if(!seg||busy)return;if(!ed.on)enterEditor('map',null);Object.assign(ed.brush,{on:true,erase:false,mask:{s:[]},stroke:null});ed.sel.clear();ed.dirtySel=true;drawBrush();maskUI()};
+  $('wBrushMode').onclick=e=>{const b=e.target.closest('button');if(!b)return;ed.brush.erase=b.dataset.v==='erase';maskUI()};
+  $('wBrushSize').oninput=e=>{ed.brush.size=+e.target.value;$('wBrushSizeV').textContent=e.target.value;drawBrush()};
+  $('wBrushUndo').onclick=()=>{if(ed.brush.mask)ed.brush.mask.s.pop();drawBrush();maskUI()};
+  $('wBrushCancel').onclick=()=>{Object.assign(ed.brush,{on:false,mask:null,stroke:null});drawBrush();maskUI()};
+  $('wBrushApply').onclick=()=>{const m=ed.brush.mask;if(!m||busy||!art)return;Object.assign(ed.brush,{on:false,mask:null,stroke:null});drawBrush();art.masks=(art.masks||[]).concat([m]);maskUI();
+    resegment(()=>{// the new zone: the hand-painted zone that overlaps this paint the most
+      const k=.25,c=mk(Math.ceil(seg.W*k),Math.ceil(seg.H*k)),x=c.getContext('2d');x.fillStyle=x.strokeStyle='#000';drawMask(x,m.s,k);const md=x.getImageData(0,0,c.width,c.height).data;
+      let hit=null,best=0;zones.filter(z=>z.r.user).forEach(z=>{const r=z.r;let n=0;for(let y=r.y0;y<=r.y1;y+=4)for(let X=r.x0;X<=r.x1;X+=4){if(seg.lab[y*seg.W+X]!==r.i)continue;if(md[(Math.floor(y*k)*c.width+Math.floor(X*k))*4+3]>127)n++}if(n>best){best=n;hit=z}});
+      if(hit){ed.sel=new Set([hit.i]);ed.dirtySel=true;updateInspector();$('wMaskHint').textContent='Готово: замальоване стало зоною #'+hit.i+'. Її колір і налаштування можна змінити на наступних кроках.'}
+      else $('wMaskHint').textContent='Не вийшло окремої зони: замалюйте ділянку щільніше.';
+      maskUI()})};
+  $('wMaskUndo').onclick=()=>{if(!art||!art.masks||!art.masks.length||busy)return;art.masks=art.masks.slice(0,-1);resegment(maskUI)};
+  $('wMaskClear').onclick=()=>{if(!art||busy)return;art.masks=[];art.walls=[];resegment(maskUI)};
   $('wSelSkip').onclick=()=>{const sel=selZones();if(!sel.length)return;const on=!sel[0].skip;sel.forEach(z=>z.skip=on);zonesChanged(true)};
   // step 3
   $('wAddColor').onclick=()=>{const c=$('wColor').value;addToPalette(c);WZ.brush=c;renderWPal()};
@@ -183,7 +194,8 @@ export function bindWizard(onPreview){
   $('wTagAll').onclick=()=>{snap(zones);zones.forEach(z=>z[WZ.tag.k]=WZ.tag.v);zonesChanged(true)};
   $('wFast').oninput=e=>{$('wFastV').textContent='×'+(+e.target.value).toFixed(1)};$('wFast').onchange=e=>{$('fastMul').value=e.target.value;$('fastMulV').textContent='×'+(+e.target.value).toFixed(1);$('fastMul').dispatchEvent(new Event('change'))};
   $('wFly').onclick=e=>{const b=e.target.closest('button');if(b)$('flyMode').querySelector('[data-v="'+b.dataset.v+'"]').click();syncCam()};
-  // step 6
+  bindSoundStep();
+  // step 7
   const P={short:['9x16','1080','60'],youtube:['16x9','1080','60'],post:['4x5','1080','30'],square:['1x1','1080','30']};
   $('wPresets').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;const p=P[b.dataset.p];if(view.fmt!==p[0])$('formats').querySelector('[data-f="'+p[0]+'"]').click();$('res').value=p[1];$('fps').value=p[2];syncExport()};
   ['res','fps','vq'].forEach(k=>{const w=$('w'+k[0].toUpperCase()+k.slice(1));w.onchange=()=>{$(k).value=w.value;$(k).dispatchEvent(new Event('change'));syncExport()};$(k).addEventListener('change',syncExport)});

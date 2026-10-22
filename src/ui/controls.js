@@ -23,7 +23,7 @@ export function buildFxUI(){
 }
 export function buildToolUI(){
   const el=$('toolSeg');el.innerHTML='';
-  Object.keys(TOOLS).forEach(k=>{const T=TOOLS[k];const b=document.createElement('button');b.dataset.t=k;b.setAttribute('aria-pressed',k===S.tool);b.innerHTML='<b>'+T.name+'</b><span>'+T.sub+'</span>';
+  Object.keys(TOOLS).forEach(k=>{const T=TOOLS[k];const b=document.createElement('button');b.dataset.t=k;b.setAttribute('aria-pressed',k===S.tool);b.innerHTML='<img class="tthumb" data-tool-thumb="'+k+'" alt="" width="96" height="96"><b>'+T.name+'</b><span>'+T.sub+'</span>';
     b.onclick=()=>{if(busy)return;S.tool=k;[...el.children].forEach(x=>x.setAttribute('aria-pressed',x===b));setToolSprite();rebuild(false)};el.appendChild(b)});
 }
 export function renderFlyList(){
@@ -73,13 +73,13 @@ export const ICP={doc:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',zones:
  image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',reset:'<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/>',brush:'<path d="M14 4l6 6-8 8-6-6z"/><path d="M6 12l-2 6 6-2"/>',
  shuffle:'<path d="M4 7h3l10 10h3M4 17h3l3-3M14 10l3-3h3"/><path d="M18 5l2 2-2 2M18 15l2 2-2 2"/>',top:'<path d="M5 4h14"/><path d="M12 20V9"/><path d="M7 13l5-5 5 5"/>',up:'<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
  down:'<path d="M12 5v14"/><path d="M6 13l6 6 6-6"/>',bottom:'<path d="M5 20h14"/><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',camera:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
- bolt:'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',hd:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M10 10v4M7 12h3M13 10h2a2 2 0 010 4h-2z"/>',shrink:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',sliders:'<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+ sound:'<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a7.5 7.5 0 010 11"/>',bolt:'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',hd:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M10 10v4M7 12h3M13 10h2a2 2 0 010 4h-2z"/>',shrink:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',sliders:'<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
  map:'<path d="M9 4l6 2 5-2v14l-5 2-6-2-5 2V6z"/><path d="M9 4v14M15 6v14"/>',drop:'<path d="M12 3c4 5 6 8 6 11a6 6 0 01-12 0c0-3 2-6 6-11z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'};
 export function ic(n){return '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICP[n]||'')+'</svg>'}
 export function decorate(el,icon,text,title){if(typeof el==='string')el=$(el);if(!el)return;const inp=el.querySelector('input');el.innerHTML=ic(icon)+(text?'<span>'+text+'</span>':'');if(inp)el.appendChild(inp);
   if(!text){el.classList.add('icon');el.setAttribute('aria-label',title)}if(title)el.title=title}
 export function iconizeUI(){
-  [['page','doc','Сторінка, проєкт і стіл'],['zones','zones','Зони, порядок і палітра'],['hand','pen','Інструмент і рука'],['cam','video','Камера та ефекти'],['out','download','Звук і експорт']].forEach(([t,i,tt])=>decorate(document.querySelector('#tabs [data-tab="'+t+'"]'),i,'',tt));
+  [['page','doc','Сторінка, проєкт і стіл'],['zones','zones','Зони, порядок і палітра'],['hand','pen','Інструмент і рука'],['cam','video','Камера та ефекти'],['snd','sound','Звук'],['out','download','Експорт']].forEach(([t,i,tt])=>decorate(document.querySelector('#tabs [data-tab="'+t+'"]'),i,'',tt));
   decorate(document.querySelector('#modeSeg [data-m="anim"]'),'film','Анімація');decorate(document.querySelector('#modeSeg [data-m="zones"]'),'zones','Зони');
   decorate(document.querySelector('#viewSeg [data-v="map"]'),'map','Карта');decorate(document.querySelector('#viewSeg [data-v="final"]'),'drop','Кольори');decorate(document.querySelector('#viewSeg [data-v="order"]'),'list','Порядок');decorate(document.querySelector('#viewSeg [data-v="cam"]'),'video','Камера');
   [['lite','bolt','Легке'],['fx','sparkle','Ефекти'],['full','hd','Повне']].forEach(([q,i,t])=>decorate(document.querySelector('#prevSeg [data-q="'+q+'"]'),i,t,t+' превʼю'));

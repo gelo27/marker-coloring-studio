@@ -1,6 +1,12 @@
 import {IMP} from './settings.js';
 import {SS,clamp,mk} from './utils.js';
 /* ================= SEGMENTATION ================= */
+/* a zone the user painted with the brush: strokes {e: eraser, r: radius, p: points} in page pixels, drawn at scale k */
+export function drawMask(x,strokes,k){x.lineCap='round';x.lineJoin='round';
+  for(const st of strokes){x.globalCompositeOperation=st.e?'destination-out':'source-over';const r=st.r*k;
+    if(st.p.length===1){x.beginPath();x.arc(st.p[0][0]*k,st.p[0][1]*k,r,0,Math.PI*2);x.fill()}
+    else{x.lineWidth=r*2;x.beginPath();st.p.forEach((q,i)=>i?x.lineTo(q[0]*k,q[1]*k):x.moveTo(q[0]*k,q[1]*k));x.stroke()}}
+  x.globalCompositeOperation='source-over'}
 export function analyze(art){
   const W=art.W,H=art.H,N=W*H;
   const d=art.lineCv.getContext('2d').getImageData(0,0,W,H).data;
@@ -17,8 +23,14 @@ export function analyze(art){
   if(art.walls&&art.walls.length){const wc=mk(W,H),wx=wc.getContext('2d');wx.strokeStyle='#000';wx.lineWidth=2.5*SS;wx.lineCap='round';wx.lineJoin='round';
     for(const p of art.walls){if(p.length<3)continue;wx.beginPath();p.forEach((q,k)=>k?wx.lineTo(q[0],q[1]):wx.moveTo(q[0],q[1]));wx.closePath();wx.stroke()}
     const wd=wx.getImageData(0,0,W,H).data;for(let i=0;i<N;i++)if(wd[i*4+3]>40)isLine[i]=1}
+  // painted zones: the outer ring of the painted shape becomes an invisible wall; the drawing's own black lines
+  // inside stay lines (paint never goes over them), and the pieces between them are merged into one zone below
+  const um=new Uint16Array(N);let mi=0;
+  if(art.masks&&art.masks.length)for(const m of art.masks){mi++;if(!m.s||!m.s.length)continue;const mc=mk(W,H),mx=mc.getContext('2d');mx.fillStyle=mx.strokeStyle='#000';drawMask(mx,m.s,1);
+    const md=mx.getImageData(0,0,W,H).data,inn=new Uint8Array(N);for(let i=0;i<N;i++)if(md[i*4+3]>127)inn[i]=1;
+    for(let i=0;i<N;i++){if(!inn[i])continue;const x=i%W,b=x===0||x===W-1||i<W||i>=N-W||!inn[i-1]||!inn[i+1]||!inn[i-W]||!inn[i+W];if(b){isLine[i]=1;um[i]=0}else if(!isLine[i])um[i]=mi}}
   ltx.putImageData(lt,0,0);
-  const lab=new Int32Array(N),stack=new Int32Array(N),regs=[];let R=0;
+  const lab=new Int32Array(N),stack=new Int32Array(N);let regs=[],R=0;
   for(let s=0;s<N;s++){
     if(isLine[s]||lab[s])continue;
     R++;let sp=0;stack[sp++]=s;lab[s]=R;
@@ -32,7 +44,7 @@ export function analyze(art){
       if(y<H-1){const q=p+W;if(!lab[q]&&!isLine[q]){lab[q]=R;stack[sp++]=q}}
     }
     const cx=sx/cnt,cy=sy/cnt,vxx=sxx/cnt-cx*cx,vyy=syy/cnt-cy*cy,vxy=sxy/cnt-cx*cy;
-    regs.push({i:R,lk:-1,area:cnt,x0,y0,x1,y1,cx,cy,edge,ang:.5*Math.atan2(2*vxy,vxx-vyy),elong:Math.sqrt(Math.pow(vxx-vyy,2)+4*vxy*vxy)/(vxx+vyy+1e-6)});
+    regs.push({i:R,lk:-1,user:!!um[s],area:cnt,x0,y0,x1,y1,cx,cy,edge,ang:.5*Math.atan2(2*vxy,vxx-vyy),elong:Math.sqrt(Math.pow(vxx-vyy,2)+4*vxy*vxy)/(vxx+vyy+1e-6)});
   }
   if(art.idCv){
     const K=art.names.length,votes=new Int32Array((R+1)*(K+1));
@@ -40,6 +52,14 @@ export function analyze(art){
     for(let i=0,j=0;i<N;i++,j+=4){const r=lab[i];if(!r)continue;if(idd[j+1]===200&&idd[j+2]===100&&idd[j]>0&&idd[j]<=K)votes[r*(K+1)+idd[j]]++}
     regs.forEach(g=>{let best=0,bv=0;for(let k=1;k<=K;k++){const v=votes[g.i*(K+1)+k];if(v>bv){bv=v;best=k}}g.id=best?art.names[best-1]:null});
   }
+  // merge the pieces of each painted zone into one region (the zone may consist of several parts between lines)
+  if(mi){const into=new Int32Array(R+1),byI=new Map(regs.map(g=>[g.i,g]));
+    for(let i=0;i<N;i++){const k=um[i],l=lab[i];if(!k||!l||into[l])continue;into[l]=-k}
+    const first=new Map();for(let l=1;l<=R;l++){if(into[l]>=0){into[l]=0;continue}const k=-into[l];if(!first.has(k)){first.set(k,l);into[l]=0}else into[l]=first.get(k)}
+    let any=false;for(let l=1;l<=R;l++)if(into[l]){any=true;const a=byI.get(into[l]),b=byI.get(l),n=a.area+b.area;
+      a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;b.gone=true}
+    if(any){for(let i=0;i<N;i++){const l=lab[i];if(l&&into[l])lab[i]=into[l]}regs=regs.filter(g=>!g.gone)}
+    first.forEach(l=>{const g=byI.get(l);if(g)g.user=true})}
   return {W,H,lab,isLine,lineTexCv,regs,rank:new Int8Array(N)};
 }
 export function loadArtFromImage(img){

@@ -3,7 +3,7 @@ import {plan,planDirty,replan} from '../core/plan.js';
 import {MOBILE_MQ,PREV,PREV_SCALE,isMobileUI,view} from '../core/settings.js';
 import {$,clamp} from '../core/utils.js';
 import {seg,zoneByI} from '../core/zones.js';
-import {ed,edFit,hideLasso,renderEditor} from '../editor/editor.js';
+import {ed,edFit,hideBrush,renderEditor} from '../editor/editor.js';
 import {camInit,camStep} from '../render/camera.js';
 import {resetPaint} from '../render/paint.js';
 import {renderAt} from '../render/renderer.js';
@@ -11,6 +11,7 @@ import {applyFormat,buildSparkles,paperShader} from '../render/scene.js';
 import {renderFlyList,showTab} from './controls.js';
 import {setSegValue2,updateInspector} from './inspector.js';
 import {lsSchedule} from './project.js';
+import {renderSoundTools} from './sound.js';
 import {syncWizard} from './wizard.js';
 /* ================= PLAYBACK ================= */
 export let playing=false,T=0,lastNow=0,busy=false;
@@ -41,7 +42,7 @@ export function loop(now){
 }
 export function fmtT(t){const m=Math.floor(t/60),s=t-m*60;return String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0')}
 export function updateUI(){if(!plan)return;$('fill').style.width=(T/plan.total*100)+'%';laneHead();$('time').textContent=fmtT(T)+' / '+fmtT(plan.total)}
-export function drawMarks(){renderFlyList();drawZoneBars();syncWizard();const m=$('marks');m.innerHTML='';plan.shots.forEach(s=>{if(s.trans==='glide'||s.intro)return;const i=document.createElement('i');if(s.trans==='whip')i.className='w';i.style.left=(plan.vOf(s.ts)/plan.total*100)+'%';m.appendChild(i)})}
+export function drawMarks(){renderFlyList();drawZoneBars();syncWizard();renderSoundTools();const m=$('marks');m.innerHTML='';plan.shots.forEach(s=>{if(s.trans==='glide'||s.intro)return;const i=document.createElement('i');if(s.trans==='whip')i.className='w';i.style.left=(plan.vOf(s.ts)/plan.total*100)+'%';m.appendChild(i)})}
 /* a slim colour strip of the zones over the scrub bar (click jumps to a zone) and the zone lane, laid out like a
    mobile video editor: blocks in painting order with number, colour and time, a fixed playhead in the middle and the
    strip sliding under it every frame while playing. Swiping the strip scrubs (the frame is redrawn once it rests),
@@ -115,7 +116,7 @@ export function setMode(m){
   ['play','restart'].forEach(id=>$(id).disabled=false);
   $('modeHint').textContent=ed.on?'Клік: вибрати зону · Shift: додати · колесо: зум':'';
   if(ed.on){playing=false;stopAudio();setPlayIcon();edFit();ed.dirtyPaint=true;ed.dirtySel=true;showTab('zones');$('zoneSec').open=true;updateInspector()}
-  else{paperShader.uniforms.uSelOn=0;ed.lasso.on=false;ed.lasso.pts=null;hideLasso();if(planDirty||!plan)rebuild(false);else seek(T)}
+  else{paperShader.uniforms.uSelOn=0;ed.brush.on=false;ed.brush.mask=null;ed.brush.stroke=null;hideBrush();if(planDirty||!plan)rebuild(false);else seek(T)}
 }
 export function setT(v){T=v}
 export function setPlaying(v){playing=v}
