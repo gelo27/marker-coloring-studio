@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D1922">
+<meta name="description" content="Розмальовка → satisfying-ролик: фломастер зафарбовує сторінку, камера знімає, на виході MP4.">
+<title>Marker Coloring Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Permanent+Marker&display=swap">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Marker Coloring Studio<span class="dot"></span></h1>
+    <p>Завантажте розмальовку, перевірте зони, задайте кольори, крупні плани й швидкість, а потім зрендерте satisfying-ролик у MP4.</p>
+  </header>
+  <div class="layout">
+    <section class="stage" aria-label="Попередній перегляд">
+      <div class="modebar">
+        <div class="rail rl"><div class="dseg" id="modeSeg"><button data-m="anim" aria-pressed="true">Анімація</button><button data-m="zones" aria-pressed="false">Зони</button></div></div>
+        <div class="rail rr"><div class="dseg" id="viewSeg" hidden><button data-v="map" aria-pressed="true">Карта зон</button><button data-v="final" aria-pressed="false">Кольори</button><button data-v="order" aria-pressed="false">Порядок</button><button data-v="cam" aria-pressed="false">Камера</button></div>
+        <div class="dseg q" id="prevSeg" title="Якість превʼю: легке — швидко й без ефектів, ефекти — швидко з ефектами камери, повне — як у відео"><button data-q="lite" aria-pressed="false">Легке</button><button data-q="fx" aria-pressed="false">Ефекти</button><button data-q="full" aria-pressed="true">Повне</button></div></div>
+        <span class="hint" id="modeHint"></span>
+      </div>
+      <div class="screenBox"><div class="screen" id="screen">
+        <div class="overlay" id="overlay">Готую сторінку…</div>
+        <div class="renderHud" id="renderHud" hidden>
+          <div class="rhBox"><div class="rhTop"><b id="rhPct">0%</b><span id="rhInfo"></span></div><div class="prog"><i id="rhProg"></i></div>
+          <button class="btn" id="rhCancel">Скасувати рендер</button></div>
+        </div>
+      </div></div>
+      <div class="transport" id="transport">
+        <button class="tbtn primary" id="play" aria-label="Відтворити"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="tbtn" id="restart" aria-label="Спочатку"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
+        <div class="tlwrap"><div class="zbars" id="zbars" title="Зони за кольором. Клік — перейти до зони."></div><div class="bar" id="bar"><div class="track"><div class="fill" id="fill"></div><div class="marks" id="marks"></div></div></div></div>
+        <span class="time" id="time">00:00.0 / 01:00.0</span>
+        <button class="tbtn" id="fsBtn" aria-label="На весь екран" title="На весь екран"></button>
+        <button class="tbtn" id="laneBtn" aria-label="Таймлайн зон" title="Таймлайн зон: час кожної зони"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="7" height="5" rx="1.5"/><rect x="12" y="6" width="9" height="5" rx="1.5"/><rect x="3" y="14" width="11" height="5" rx="1.5"/><path d="M17 13v7"/></svg></button>
+        <button class="tbtn" id="frameQuick" aria-label="Зберегти кадр" title="Зберегти кадр PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+      </div>
+      <div class="zlaneBox" id="zlaneBox" hidden>
+        <div class="zlaneTop"><b>Таймлайн зон</b><span>гортайте стрічку — перемотка, тягніть правий край блоку — час зони, Ctrl+колесо — масштаб</span><label>Масштаб <input type="range" id="laneZoom" min="12" max="160" step="2" value="48"></label><button class="btn small" id="laneReset">Скинути час</button></div>
+        <div class="zlaneWrap"><div class="zlane" id="zlane"><div class="zlaneIn" id="zlaneIn"></div></div><i class="zlaneHead" id="zlaneHead"></i></div>
+      </div>
+      <div class="renderOut" id="renderOut">
+        <div class="prog" id="progBox" hidden><i id="prog"></i></div>
+        <p class="hint" id="renderInfo"></p>
+        <div class="btns"><button class="btn" id="cancelRender" hidden>Скасувати рендер</button><button class="btn cta" id="save" hidden>Зберегти файл</button></div>
+        <video id="result" controls playsinline hidden></video>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <div class="paneltop">
+        <div class="seg uimode" id="uiMode"><button data-v="wiz" aria-pressed="true">Покроково</button><button data-v="adv" aria-pressed="false">Усі налаштування</button></div>
+      </div>
+
+      <nav class="steps" id="steps" aria-label="Кроки">
+        <button data-s="1"><i>1</i>Картинка</button><button data-s="2"><i>2</i>Зони</button><button data-s="3"><i>3</i>Кольори</button><button data-s="4"><i>4</i>Порядок</button><button data-s="5"><i>5</i>Камера</button><button data-s="6"><i>6</i>Відео</button><button data-s="adv"><i>⋯</i>Ще</button>
+      </nav>
+
+      <div id="wiz" class="wiz">
+
+        <section class="step" data-step="1">
+          <h2>Картинка й формат</h2>
+          <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Завантажити картинку">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="M7 10l5-5 5 5"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+            <b>Перетягніть картинку сюди</b>
+            <span>або натисніть, щоб вибрати файл · PNG, JPG, WebP · чиста або вже зафарбована</span>
+            <input type="file" id="wArtFile" accept="image/*" hidden>
+          </div>
+          <div class="btns"><button class="btn small" id="wDemo">Спробувати демо</button><label class="btn small">Відкрити проєкт…<input type="file" id="wProjFile" accept=".json,application/json"></label></div>
+          <span class="lbl">Формат відео</span>
+          <div class="seg" id="wFormats"><button data-f="9x16">9:16</button><button data-f="4x5">4:5</button><button data-f="1x1">1:1</button><button data-f="16x9">16:9</button></div>
+          <div class="row sl"><label for="wDur">Тривалість</label><input type="range" id="wDur" min="30" max="120" step="5" value="60"><span class="val" id="wDurV">60 с</span></div>
+          <div class="row"><label for="wTool">Чим малювати</label><select id="wTool"></select></div>
+          <p class="hint" id="wArtInfo">Почніть із демо або завантажте свою сторінку.</p>
+        </section>
+
+        <section class="step" data-step="2" hidden>
+          <h2>Перевірте зони</h2>
+          <div class="chips" id="wZoneStats"></div>
+          <ul class="warn" id="wZoneWarn"></ul>
+          <div class="seg" id="wZoneView"><button data-v="map">Карта зон</button><button data-v="final">Кольори</button></div>
+          <div class="row sl"><label for="wLineK">Чутливість контуру</label><input type="range" id="wLineK" min="0.2" max="0.7" step="0.01" value="0.42"><span class="val" id="wLineKV">0.42</span></div>
+          <div class="row sl"><label for="wMinArea">Найменша зона</label><input type="range" id="wMinArea" min="20" max="600" step="5" value="95"><span class="val" id="wMinAreaV">95</span></div>
+          <button class="btn small" id="wReseg">Перерахувати зони</button>
+          <div class="selinfo" id="wZoneSel" hidden><span class="dot" id="wSelDot"></span><b id="wSelName"></b><button class="btn small" id="wSelSkip"></button></div>
+          <p class="hint">Кожна зона на карті має свій колір. Перевірте, чи не злиплися сусідні ділянки (так буває, коли в контурі розрив) і чи не загубились дрібні деталі. Торкніться зони, щоб вибрати її; колесо або два пальці — масштаб.</p>
+        </section>
+
+        <section class="step" data-step="3" hidden>
+          <h2>Кольори</h2>
+          <p class="hint">Виберіть колір і торкайтеся зон на сторінці. Перший кружок із червоним хрестиком — не замальовувати зону.</p>
+          <div class="pal big" id="wPal"></div>
+          <div class="addc"><input type="color" id="wColor" value="#ff8fab" aria-label="Свій колір"><button class="btn small" id="wAddColor">Додати колір</button></div>
+          <label class="switch"><input type="checkbox" id="wSame"> Замінювати колір в усіх зонах такого ж кольору</label>
+          <div class="btns"><button class="btn small" id="wUndo" disabled>Скасувати</button><button class="btn small" id="wAutoPal">Авто-розфарбування</button><button class="btn small" id="wShuffle">Перемішати</button><label class="btn small">Кольори з картинки…<input type="file" id="wRefFile" accept="image/*"></label></div>
+          <label class="switch" id="wShadeRow" hidden><input type="checkbox" id="wShade" checked> Тіні й відблиски з оригіналу</label>
+        </section>
+
+        <section class="step" data-step="4" hidden>
+          <h2>Порядок замальовування</h2>
+          <div class="row"><label for="wOrderRule">Як іти</label><select id="wOrderRule"><option value="groups">Групами кольорів</option><option value="auto">Авто (за обʼєктами)</option><option value="top">Зверху вниз</option><option value="bottom">Знизу вгору</option><option value="left">Зліва направо</option><option value="center">Від центру</option><option value="big">Великі спершу</option><option value="small">Дрібні спершу</option><option value="custom" hidden>Власний</option></select></div>
+          <div class="row" id="wGroupRuleRow"><label for="wGroupRule">Черга кольорів</label><select id="wGroupRule"></select></div>
+          <p class="hint">Перетягуйте групи кольорів або тисніть стрілки. Усередині групи зони йдуть за розташуванням, тож рука не стрибає сторінкою. Номери на сторінці показують чергу.</p>
+          <ol class="glist" id="wGroups"></ol>
+          <div class="btns"><button class="btn small" id="wSeq">Задати кліками</button><button class="btn small" id="wOrderReset">Скинути</button></div>
+        </section>
+
+        <section class="step" data-step="5" hidden>
+          <h2>Камера й швидкість</h2>
+          <div class="seg" id="wCamMode"><button data-v="montage">Монтаж</button><button data-v="nib">Перо крупно</button></div>
+          <p class="hint" id="wCamHint"></p>
+          <span class="lbl">Пензлик налаштувань: виберіть і торкайтеся зон</span>
+          <div class="tags" id="wTags">
+            <button data-k="close" data-v="auto">Камера: авто</button><button data-k="close" data-v="on"><i class="lg close"></i>Крупний план</button><button data-k="close" data-v="off"><i class="lg wide"></i>Загальний</button>
+            <button data-k="speed" data-v="auto">Швидкість: авто</button><button data-k="speed" data-v="normal">Звичайно</button><button data-k="speed" data-v="fast"><i class="lg fast"></i>Швидко</button><button data-k="speed" data-v="cut"><i class="lg cut"></i>Склейка</button>
+          </div>
+          <div class="btns"><button class="btn small" id="wTagAll">Застосувати до всіх зон</button></div>
+          <p class="hint">«Склейка»: нецікава зона не малюється в кадрі. Коли до неї доходить черга, монтаж робить склейку, і вона вже зафарбована. Бліді кольори на карті — автоматичний вибір.</p>
+          <div class="row sl"><label for="wFast">Прискорення</label><input type="range" id="wFast" min="1.5" max="5" step="0.1" value="2.6"><span class="val" id="wFastV">×2.6</span></div>
+          <span class="lbl">Проліт камери над готовою сторінкою</span>
+          <div class="seg" id="wFly"><button data-v="before">Перед фіналом</button><button data-v="after">Після</button><button data-v="off">Вимк.</button></div>
+        </section>
+
+        <section class="step" data-step="6" hidden>
+          <h2>Відео</h2>
+          <span class="lbl">Куди публікуєте</span>
+          <div class="presets" id="wPresets">
+            <button data-p="short"><b>TikTok · Reels · Shorts</b><span>9:16 · 1080p · 60 fps</span></button>
+            <button data-p="youtube"><b>YouTube</b><span>16:9 · 1080p · 60 fps</span></button>
+            <button data-p="post"><b>Пост Instagram</b><span>4:5 · 1080p · 30 fps</span></button>
+            <button data-p="square"><b>Квадрат</b><span>1:1 · 1080p · 30 fps</span></button>
+          </div>
+          <div class="row"><label for="wRes">Роздільність</label><select id="wRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p (2K)</option></select></div>
+          <div class="row"><label for="wFps">Частота кадрів</label><select id="wFps"><option value="30">30 fps</option><option value="60">60 fps</option></select></div>
+          <div class="row"><label for="wVq">Якість</label><select id="wVq"><option value="high">Висока</option><option value="std">Стандартна</option><option value="small">Компактний файл</option></select></div>
+          <label class="switch"><input type="checkbox" id="wSnd" checked> ASMR-звук інструмента</label>
+          <label class="switch"><input type="checkbox" id="wOutOn"> Фінальна заставка: лайк і напис</label>
+          <p class="est" id="wEst"></p>
+          <button class="btn cta" id="wRender">Зрендерити відео</button>
+          <p class="hint">Перед рендером перегляньте ролик кнопкою ▶ під сторінкою. Рендер іде кадр за кадром, прогрес видно під превʼю.</p>
+        </section>
+
+        <div class="stepnav"><button class="btn" id="wPrev">Назад</button><span class="val" id="wStepN">1 / 6</span><button class="btn cta" id="wNext">Далі</button></div>
+      </div>
+
+      <div id="adv" class="adv" hidden>
+      <nav class="tabs" id="tabs" role="tablist" aria-label="Розділи налаштувань">
+        <button role="tab" data-tab="page" aria-selected="true">Сторінка</button>
+        <button role="tab" data-tab="zones" aria-selected="false">Зони</button>
+        <button role="tab" data-tab="hand" aria-selected="false">Інструмент</button>
+        <button role="tab" data-tab="cam" aria-selected="false">Камера</button>
+        <button role="tab" data-tab="out" aria-selected="false">Експорт</button>
+      </nav>
+      <details data-tab="page" open id="projSec">
+        <summary>Проєкт</summary>
+        <div class="body">
+          <div class="btns"><button class="btn small" id="projSave">Зберегти проєкт (.json)</button><label class="btn small">Відкрити…<input type="file" id="projFile" accept=".json,application/json"></label></div>
+          <div class="btns"><button class="btn small" id="lsRestore" hidden>Відновити з браузера</button><button class="btn small" id="lsClear" hidden>Видалити збереження</button></div>
+          <label class="switch"><input type="checkbox" id="lsAuto" checked> Автозбереження в браузері</label>
+          <p class="hint" id="lsInfo">Файл .json містить усі налаштування та картинки: розмальовку, референс кольорів, стіл і патерн.</p>
+        </div>
+      </details>
+
+      <details data-tab="zones" id="zoneSec" open>
+        <summary>Зона <span class="badge" id="selBadge">не вибрано</span></summary>
+        <div class="body insp" id="insp">
+          <div class="empty" id="inspEmpty">Перейдіть у режим «Зони» й клацніть по ділянці. Shift+клік додає до вибору. Колесо миші наближує, перетягування рухає сторінку.</div>
+          <div id="inspBody" hidden class="insp">
+            <div class="selhead"><span class="dot" id="selDot"></span><b id="selTitle">1 зона</b><span class="val" id="selArea"></span></div>
+            <div class="btns"><button class="btn small" id="selSame">Того ж кольору</button><button class="btn small" id="selAll">Усі</button><button class="btn small" id="selNone">Зняти вибір</button></div>
+            <span class="lbl">Колір</span>
+            <div class="pal" id="zPal"></div>
+            <div class="row"><span class="lbl">Свій колір</span><input type="color" id="zColor" value="#ff8fab"></div>
+            <span class="lbl">Як замальовувати цю зону</span>
+            <div class="row"><label for="zTool">Інструмент</label><select id="zTool"></select></div>
+            <div class="row"><label for="zStyle">Стиль</label><select id="zStyle"><option value="">Як у проєкті</option><option value="human">Людський</option><option value="neat">Акуратний</option></select></div>
+            <div class="row"><label for="zPreset">Характер руки</label><select id="zPreset"></select></div>
+            <div class="row"><label for="zFill">Заповнення</label><select id="zFill"><option value="">Як у проєкті</option><option value="auto">Авто: мікс</option><option value="hatch">Штриховка</option><option value="radial">Контур за контуром</option><option value="circles">Кругові рухи</option><option value="patches">Латками</option></select></div>
+            <span class="lbl">Крупний план</span>
+            <div class="seg" id="zClose"><button data-v="auto">Авто</button><button data-v="on">Так</button><button data-v="off">Ні</button></div>
+            <div class="row"><label for="zZoom">Масштаб плану</label><span class="val" id="zZoomV">2.4×</span></div>
+            <input type="range" id="zZoom" min="1.3" max="5" step="0.1" value="2.4">
+            <span class="lbl">Тінь об'єму</span>
+            <div class="seg" id="zVShade"><button data-v="auto">Авто</button><button data-v="on">Увімк.</button><button data-v="off">Вимк.</button></div>
+            <span class="lbl">Швидкість</span>
+            <div class="seg" id="zSpeed"><button data-v="auto">Авто</button><button data-v="normal">Звичайна</button><button data-v="fast">Прискорена</button><button data-v="cut">Склейка</button></div>
+            <span class="lbl">Порядок</span>
+            <div class="btns"><button class="btn small" id="oFirst" title="На початок">⤒ Першою</button><button class="btn small" id="oUp">↑ Раніше</button><button class="btn small" id="oDown">↓ Пізніше</button><button class="btn small" id="oLast" title="В кінець">⤓ Останньою</button></div>
+            <button class="btn small" id="zReset">Повернути авто-налаштування</button>
+          </div>
+        </div>
+      </details>
+
+      <details data-tab="zones" id="orderSec" open>
+        <summary>Порядок замальовування <span class="badge" id="orderBadge">авто</span></summary>
+        <div class="body">
+          <div class="row"><label for="orderPreset">Правило</label><select id="orderPreset">
+            <option value="auto">Авто (за обʼєктами)</option><option value="groups">Групами кольорів</option><option value="top">Зверху вниз</option><option value="bottom">Знизу вгору</option><option value="left">Зліва направо</option><option value="center">Від центру</option><option value="big">Великі спершу</option><option value="small">Дрібні спершу</option><option value="color">За кольором</option><option value="custom" hidden>Власний</option></select></div>
+          <div class="btns"><button class="btn small" id="seqBtn">Задати кліками</button><button class="btn small" id="orderReset">Скинути</button></div>
+          <p class="hint" id="seqHint">Перетягуйте рядки, щоб змінити чергу. У режимі «Задати кліками» клацайте зони на сторінці по черзі, решта піде після них.</p>
+          <ol class="olist" id="orderList"></ol>
+        </div>
+      </details>
+
+      <details data-tab="zones" open>
+        <summary>Тіні об'єму <span class="badge" id="vsBadge">увімк.</span></summary>
+        <div class="body">
+          <label class="switch"><input type="checkbox" id="vsOn" checked> Фломастер домальовує тіні після всіх зон</label>
+          <div class="row"><label for="vsDir">Звідки світло</label><select id="vsDir"><option value="ul" selected>Зверху зліва</option><option value="u">Зверху</option><option value="ur">Зверху справа</option><option value="r">Справа</option><option value="dr">Знизу справа</option><option value="d">Знизу</option><option value="dl">Знизу зліва</option><option value="l">Зліва</option></select></div>
+          <div class="row"><label for="vsStyle">Стиль тіні</label><select id="vsStyle"><option value="solid" selected>Суцільна</option><option value="soft">М'який перехід</option><option value="hatch">Комікс-штриховка</option></select></div>
+          <div class="row"><label for="vsW">Ширина тіні</label><span class="val" id="vsWV">0.26</span></div>
+          <input type="range" id="vsW" min="0.08" max="0.6" step="0.01" value="0.26">
+          <div class="row"><label for="vsDark">Темнота тіні</label><span class="val" id="vsDarkV">0.30</span></div>
+          <input type="range" id="vsDark" min="0.1" max="0.6" step="0.01" value="0.3">
+          <p class="hint">Тінь рахується за формою зони (ніби вона надута), тож межа огинає форму; фломастер малює її штрихами вздовж форми темнішим відтінком кольору зони. Для кожної зони тінь вмикається чи вимикається в її налаштуваннях. Авто: тіні отримують помітні зони, крім фону, дрібних деталей і зон, що вже мають власні тіні з оригіналу.</p>
+        </div>
+      </details>
+      <details data-tab="zones" open>
+        <summary>Палітра</summary>
+        <div class="body">
+          <div class="pal editable" id="palette"></div>
+          <div class="addc"><input type="color" id="newColor" value="#7cc8f0" aria-label="Новий колір"><button class="btn small" id="addColor">Додати колір</button></div>
+          <div class="btns"><button class="btn small" id="applyPal">Розфарбувати палітрою</button><button class="btn small" id="shufflePal">Перемішати</button></div>
+          <p class="hint">Клік по кольору з вибраними зонами фарбує їх у цей колір. Кружок із хрестиком — не замальовувати.</p>
+        </div>
+      </details>
+
+      <details data-tab="page" open>
+        <summary>Сторінка</summary>
+        <div class="body">
+          <div class="btns">
+            <label class="btn">Завантажити сторінку…<input type="file" id="artFile" accept="image/*"></label>
+            <button class="btn" id="demo">Демо</button>
+          </div>
+          <div class="humbox" id="impBox" hidden>
+            <label class="switch"><input type="checkbox" id="impColors" checked> Брати кольори з оригіналу</label>
+            <div class="row"><label for="impThr">Поріг контуру</label><span class="val" id="impThrV">0.38</span></div>
+            <input type="range" id="impThr" min="0.15" max="0.6" step="0.01" value="0.38">
+            <label class="switch"><input type="checkbox" id="impShade" checked> Тіні, відблиски й додаткові штрихи</label>
+            <div class="row"><label for="impWhen">Коли класти тіні</label><select id="impWhen"><option value="zone">Одразу після зони</option><option value="end">Після всіх базових кольорів</option></select></div>
+          </div>
+          <div class="btns"><label class="btn small">Кольори з картинки…<input type="file" id="refFile" accept="image/*"></label></div>
+          <p class="hint" id="artInfo">Підійде чиста розмальовка або вже зафарбована. У зафарбованої контури виділяються автоматично, а кольори, тіні й відблиски зон беруться з оригіналу.</p>
+        </div>
+      </details>
+
+      <details data-tab="page" open>
+        <summary>Формат і таймінг</summary>
+        <div class="body">
+          <div class="seg" id="formats">
+            <button data-f="9x16" aria-pressed="true">9:16</button><button data-f="4x5" aria-pressed="false">4:5</button><button data-f="1x1" aria-pressed="false">1:1</button><button data-f="16x9" aria-pressed="false">16:9</button>
+          </div>
+          <div class="row"><label for="dur">Тривалість</label><span class="val" id="durV">60 с</span></div>
+          <input type="range" id="dur" min="30" max="120" step="5" value="60">
+          <div class="row"><label for="fastMul">Прискорені зони</label><span class="val" id="fastMulV">×2.6</span></div>
+          <input type="range" id="fastMul" min="1.5" max="5" step="0.1" value="2.6">
+          <label class="switch"><input type="checkbox" id="montage" checked> Крупні плани та склейки</label>
+        </div>
+      </details>
+
+      <details data-tab="hand" open>
+        <summary>Стиль замальовування</summary>
+        <div class="body">
+          <span class="lbl">Інструмент</span>
+          <div class="tools" id="toolSeg"></div>
+          <div class="humbox" id="liqBox" hidden>
+            <div class="row"><label for="liqPrev">Рідка фарба: якість превʼю</label><select id="liqPrev"><option value="140" selected>Чернетка</option><option value="220">Висока</option><option value="320">Дуже висока</option><option value="440">Максимальна</option></select></div>
+            <div class="row"><label for="liqMix">Рідка фарба: відтінки</label><select id="liqMix"><option value="1">Один колір</option><option value="2" selected>Два відтінки</option><option value="3">Три відтінки</option></select></div>
+            <label class="switch"><input type="checkbox" id="liqGloss" checked> Мокрий блиск</label>
+            <label class="switch"><input type="checkbox" id="liqDrops" checked> Краплі з піпетки</label>
+            <label class="switch"><input type="checkbox" id="liqBlooms" checked> Акварельні квіти при висиханні</label>
+            <label class="switch"><input type="checkbox" id="liqCine" checked> Крупний план для рідини</label>
+            <div class="row"><label for="liqRender">Рідка фарба: якість рендера</label><select id="liqRender"><option value="140">Чернетка</option><option value="220">Висока</option><option value="320" selected>Дуже висока</option><option value="440">Максимальна</option></select></div>
+            <p class="hint">Превʼю рахується в нижчій якості, щоб усе відтворювалось плавно. Під час рендеру відео студія сама перемикається на якість рендера: чіткі розводи без пікселів на великих зонах.</p>
+          </div>
+          <div class="humbox" id="duoBox" hidden>
+            <div class="row"><label for="duoShift">Хамелеон: товщина плівки (відтінки)</label><span class="val" id="duoShiftV">120°</span></div>
+            <input type="range" id="duoShift" min="40" max="200" step="5" value="120">
+          </div>
+          <div class="humbox" id="glueBox" hidden>
+            <div class="row"><label for="gltDens">Щільність блискіток</label><span class="val" id="gltDensV">88</span></div>
+            <input type="range" id="gltDens" min="0.4" max="1" step="0.02" value="0.88">
+          </div>
+          <div class="humbox" id="puffBox" hidden>
+            <div class="row"><label for="puffRel">Рельєф фарби</label><span class="val" id="puffRelV">7.5</span></div>
+            <input type="range" id="puffRel" min="3" max="18" step="0.5" value="7.5">
+            <div class="row"><label for="puffGloss">Глянець</label><span class="val" id="puffGlossV">1.00</span></div>
+            <input type="range" id="puffGloss" min="0" max="2" step="0.05" value="1">
+          </div>
+          <div class="seg" id="styleSeg"><button data-s="human" aria-pressed="true">Людський</button><button data-s="neat" aria-pressed="false">Акуратний</button></div>
+          <div id="humBox" class="humbox">
+            <div class="row"><label for="humPreset">Характер руки</label><select id="humPreset"></select></div>
+            <div class="row"><label for="humFill">Заповнення</label><select id="humFill"><option value="auto">Авто: мікс</option><option value="hatch">Штриховка</option><option value="radial">Контур за контуром</option><option value="circles">Кругові рухи</option><option value="patches">Латками</option></select></div>
+            <div class="hum" id="humList"></div>
+            <label class="switch"><input type="checkbox" id="humTouch" checked> Повертатися до пропусків</label>
+          </div>
+          <p class="hint" id="styleHint">Рука обводить контур, штрихує нерівно, змінює натиск, робить паузи, а наприкінці повертається й домальовує пропуски.</p>
+        </div>
+      </details>
+
+      <details data-tab="cam" open>
+        <summary>Режим камери</summary>
+        <div class="body">
+          <div class="seg" id="camMode"><button data-v="montage" aria-pressed="true">Монтаж</button><button data-v="nib" aria-pressed="false">Перо крупно</button></div>
+          <p class="hint">«Перо крупно» — макрозйомка: камера весь час веде кінчик інструмента, у кадрі лише його передня половина. Початок і фінальний показ сторінки лишаються загальними планами.</p>
+        </div>
+      </details>
+
+      <details data-tab="cam" id="flySec" open>
+        <summary>Проліт камери <span class="badge" id="flyBadge">авто</span></summary>
+        <div class="body">
+          <div class="seg" id="flyMode"><button data-v="before" aria-pressed="true">Перед фіналом</button><button data-v="after" aria-pressed="false">Після фіналу</button><button data-v="off" aria-pressed="false">Вимк.</button></div>
+          <div class="row"><label for="flyDur">Час на сегмент</label><span class="val" id="flyDurV">3.0 с</span></div>
+          <input type="range" id="flyDur" min="1.5" max="6" step="0.5" value="3">
+          <div class="row"><label for="flyCount">Кількість авто-сегментів</label><span class="val" id="flyCountV">3</span></div>
+          <input type="range" id="flyCount" min="1" max="6" step="1" value="3">
+          <div class="row"><label for="flyZoom">Масштаб прольоту</label><span class="val" id="flyZoomV">×1.00</span></div>
+          <input type="range" id="flyZoom" min="0.6" max="1.6" step="0.05" value="1">
+          <ol class="olist" id="flyList"></ol>
+          <div class="btns"><button class="btn small" id="flyAdd">Додати вибрані зони</button><button class="btn small" id="flyAuto">Авто-сегменти</button></div>
+          <p class="hint">Сегменти підбираються автоматично. Щоб задати свої, виберіть одну чи кілька зон у режимі «Зони» й натисніть «Додати вибрані зони»: камера покаже їх разом.</p>
+        </div>
+      </details>
+
+      <details data-tab="cam" open>
+        <summary>Ефекти камери</summary>
+        <div class="body fx" id="fxList"></div>
+      </details>
+
+      <details data-tab="page" open>
+        <summary>Стіл</summary>
+        <div class="body">
+          <div class="seg" id="deskMode"><button data-v="default" aria-pressed="true">Стандартний</button><button data-v="tile" aria-pressed="false">Патерн</button><button data-v="cover" aria-pressed="false">Картинка</button></div>
+          <div class="btns"><label class="btn small">Завантажити зображення…<input type="file" id="deskFile" accept="image/*"></label></div>
+          <div class="row" id="deskTintRow"><span class="lbl">Колір столу</span><input type="color" id="deskTint" value="#ccded6"></div>
+          <div class="row"><label for="deskScale">Масштаб патерну</label><span class="val" id="deskScaleV">1.0×</span></div>
+          <input type="range" id="deskScale" min="0.2" max="4" step="0.1" value="1">
+          <div class="row"><label for="deskBright">Яскравість</label><span class="val" id="deskBrightV">1.00</span></div>
+          <input type="range" id="deskBright" min="0.4" max="1.3" step="0.05" value="1">
+          <div class="row"><label for="deskBlur">Розмиття</label><span class="val" id="deskBlurV">0</span></div>
+          <input type="range" id="deskBlur" min="0" max="5" step="0.5" value="0">
+          <p class="hint" id="deskInfo">«Патерн» повторює зображення плиткою, «Картинка» розтягує його на весь фон.</p>
+        </div>
+      </details>
+
+      <details data-tab="page" open>
+        <summary>Текстура</summary>
+        <div class="body">
+          <div class="row"><label for="pstr">Видимість патерну</label><span class="val" id="pstrV">0.45</span></div>
+          <input type="range" id="pstr" min="0" max="1" step="0.05" value="0.45">
+          <div class="row"><label for="pscl">Масштаб патерну</label><span class="val" id="psclV">1.0×</span></div>
+          <input type="range" id="pscl" min="0.4" max="2.5" step="0.1" value="1">
+          <div class="row"><label for="grain">Зерно паперу</label><span class="val" id="grainV">0.60</span></div>
+          <input type="range" id="grain" min="0" max="1" step="0.05" value="0.6">
+          <div class="btns"><label class="btn small">Свій патерн…<input type="file" id="patFile" accept="image/*"></label><button class="btn small" id="patReset">Стандартний</button></div>
+          <p class="hint" id="patInfo">Стандартний патерн генерується процедурно. Свою текстуру буде зроблено безшовною автоматично.</p>
+        </div>
+      </details>
+
+      <details data-tab="out" open id="sndSec">
+        <summary>Звук <span class="badge" id="sndBadge">ASMR</span></summary>
+        <div class="body">
+          <label class="switch"><input type="checkbox" id="sndOn" checked> Звук інструмента</label>
+          <div class="row"><label for="sndVol">Гучність</label><span class="val" id="sndVolV">80</span></div>
+          <input type="range" id="sndVol" min="0" max="1" step="0.05" value="0.8">
+          <div class="row"><label for="sndStrokes">Штрихи по паперу</label><span class="val" id="sndStrokesV">100</span></div>
+          <input type="range" id="sndStrokes" min="0" max="1.5" step="0.05" value="1">
+          <div class="row"><label for="sndEvents">Ковпачки, клацання, вода</label><span class="val" id="sndEventsV">80</span></div>
+          <input type="range" id="sndEvents" min="0" max="1.5" step="0.05" value="0.8">
+          <div class="row"><label for="sndRoom">Тиша кімнати</label><span class="val" id="sndRoomV">40</span></div>
+          <input type="range" id="sndRoom" min="0" max="1" step="0.05" value="0.4">
+          <div class="row"><label for="sndRev">Реверберація</label><span class="val" id="sndRevV">35</span></div>
+          <input type="range" id="sndRev" min="0" max="1" step="0.05" value="0.35">
+          <p class="hint" id="sndInfo">Звук синтезується під кожен рух руки: швидкість, натиск, фактуру паперу й зміну кольору. Музики немає. Слухайте в навушниках.</p>
+        </div>
+      </details>
+
+      <details data-tab="out" open>
+        <summary>Експорт</summary>
+        <div class="body">
+          <label class="switch"><input type="checkbox" id="outOn"> Фінальна заставка: лайк і напис</label>
+          <div id="outBox" hidden>
+            <div class="row"><label for="outDur">Тривалість заставки</label><span class="val" id="outDurV">6 с</span></div>
+            <input type="range" id="outDur" min="3" max="12" step="0.5" value="6">
+            <div class="row"><label for="outText">Напис</label><input type="text" class="tx" id="outText" value="SUBSCRIBE" maxlength="18" spellcheck="false"></div>
+            <div class="row"><label for="outStyle">Стиль напису</label><select id="outStyle"><option value="hand" selected>Рукописний (легко читати)</option><option value="script">Каліграфічний пропис</option><option value="print">Друкований маркер</option></select></div>
+            <div class="row"><label for="outColor">Колір фломастера</label><input type="color" id="outColor" value="#e3263b"></div>
+            <p class="hint">Додається в кінець ролику: на сторінку лягає чистий аркуш, фломастер обводить і зафарбовує лайк, а під ним пише напис. Рукописний стиль працює для латиниці; кирилицю фломастер пише друкованим шрифтом.</p>
+          </div>
+          <div class="row"><label for="vfmt">Тип файлу</label><select id="vfmt"><option value="mp4" selected>MP4 (H.264 + AAC)</option><option value="webm">WebM (VP9 + Opus)</option></select></div>
+          <div class="row"><label for="res">Роздільність</label><select id="res"><option value="1440">1440p (2K)</option><option value="1080" selected>1080p</option><option value="720">720p</option></select></div>
+          <div class="row"><label for="fps">Частота кадрів</label><select id="fps"><option value="30">30 fps</option><option value="60" selected>60 fps</option></select></div>
+          <div class="row"><label for="vq">Якість</label><select id="vq"><option value="high">Висока</option><option value="std" selected>Стандартна</option><option value="small">Компактний файл</option></select></div>
+          <p class="est" id="vEst"></p>
+          <button class="btn cta" id="render">Зрендерити відео</button>
+          <button class="btn" id="frameBtn">Зберегти поточний кадр (PNG)</button>
+        </div>
+      </details>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="dropOverlay" id="dropOverlay" hidden><div><b>Відпустіть, щоб завантажити</b><span>картинку розмальовки або проєкт .json</span></div></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

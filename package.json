@@ -1,0 +1,23 @@
+{
+  "name": "marker-coloring-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "mp4-muxer": "^5.1.3",
+    "pixi.js": "^7.4.2",
+    "webm-muxer": "^5.1.3"
+  },
+  "devDependencies": {
+    "eslint": "^10.13.0",
+    "fflate": "^0.8.3",
+    "globals": "^17.13.0",
+    "vite": "^8.3.5"
+  }
+}

@@ -1,0 +1,188 @@
+/* Step-by-step mode, stage additions and the phone layout. Loaded after app.css. */
+h2{font-family:var(--display);font-weight:600;font-size:19px;margin:2px 0 0}
+.paneltop{position:sticky;top:0;z-index:4;background:var(--surface);padding:12px 0 8px}
+.uimode button{font-size:12.5px}
+.advmode .paneltop{position:static}
+.wiz{display:flex;flex-direction:column;gap:12px;padding-bottom:10px}
+.steps{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px;margin:0 -2px}
+.steps::-webkit-scrollbar{display:none}
+.steps button{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:transparent;color:var(--muted);font:600 11.5px var(--body);padding:6px;border-radius:10px;cursor:pointer;min-width:52px}
+.steps button i{font-style:normal;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--chip);color:var(--muted);font:700 12px var(--body);transition:background .15s}
+.steps button.done i{background:var(--accent-soft);color:var(--accent)}
+.steps button[aria-current="step"]{color:var(--ink)}
+.steps button[aria-current="step"] i{background:var(--accent);color:#fff}
+.step{display:flex;flex-direction:column;gap:10px}
+.drop{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;border:2px dashed var(--line);border-radius:16px;padding:26px 16px;cursor:pointer;background:var(--chip);transition:border-color .15s,background .15s}
+.drop:hover,.drop:focus-visible{border-color:var(--accent);background:var(--accent-soft)}
+.drop svg{width:38px;height:38px;color:var(--accent)}
+.drop b{font:600 16px var(--display)}
+.drop span{color:var(--muted);font-size:12.5px;max-width:34ch}
+.dropOverlay{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(20,14,26,.55);backdrop-filter:blur(3px);padding:24px}
+.dropOverlay>div{display:flex;flex-direction:column;align-items:center;gap:6px;padding:40px 48px;border:3px dashed #fff;border-radius:22px;color:#fff;text-align:center}
+.dropOverlay b{font:600 22px var(--display)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{background:var(--chip);border-radius:99px;padding:3px 10px;font-size:12px;font-weight:600}
+.warn{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.warn:empty{display:none}
+.warn li{background:#FFF4D6;color:#5C4500;border-radius:10px;padding:8px 10px;font-size:12.5px}
+.warn li[tabindex]{cursor:pointer}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .warn li{background:#3A3016;color:#F6DE9A}}
+:root[data-theme="dark"] .warn li{background:#3A3016;color:#F6DE9A}
+.selinfo{display:flex;align-items:center;gap:10px;background:var(--chip);border-radius:10px;padding:8px 10px}
+.selinfo .dot{width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);flex:none}
+.selinfo .btn{margin-left:auto}
+.pal.big{gap:9px}
+.pal.big .sw{width:38px;height:38px}
+.sw.nop{background:#fff;box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.18)}
+.sw.nop::before,.sw.nop::after{content:"";position:absolute;left:22%;right:22%;top:50%;height:2.5px;margin-top:-1.25px;border-radius:2px;background:#E5323B}
+.sw.nop::before{transform:rotate(45deg)}
+.sw.nop::after{transform:rotate(-45deg)}
+.sw.nop.on{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent),inset 0 0 0 1.5px rgba(0,0,0,.18)}
+.glist{list-style:none;margin:0;padding:4px;display:flex;flex-direction:column;gap:4px;background:var(--chip);border-radius:12px;max-height:340px;overflow:auto}
+.glist:empty{display:none}
+.glist li{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid transparent;border-radius:9px;padding:6px 8px;cursor:pointer;user-select:none}
+.glist li.drag{opacity:.4}
+.glist li.over{box-shadow:0 -2px 0 var(--accent)}
+.glist li.skip{opacity:.5}
+.glist .grip{color:var(--muted);cursor:grab;letter-spacing:-2px;font-size:12px}
+.glist .n{font-family:var(--mono);font-size:11px;color:var(--muted);width:18px;text-align:right}
+.glist .d{width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);flex:none}
+.glist .t{font-size:12.5px;margin-right:auto}
+.glist .ib{border:0;background:var(--chip);color:var(--ink);cursor:pointer;font:700 13px var(--body);width:30px;height:30px;border-radius:8px}
+.glist .ib[disabled]{opacity:.3;cursor:default}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 12.5px var(--body);padding:7px 11px;border-radius:99px;cursor:pointer}
+.tags button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.lg{width:14px;height:14px;border-radius:4px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.lg.close{background:#A98BF0}
+.lg.wide{background:#86D3C3}
+.lg.fast{background:repeating-linear-gradient(45deg,#FF8A28 0 3px,#FFE3C8 3px 6px)}
+.lg.cut{background:repeating-linear-gradient(45deg,#6E6478 0 1.5px,#B7B0C2 1.5px 5px)}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.presets button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:9px 10px;cursor:pointer}
+.presets b{font:600 13px var(--body)}
+.presets span{font-size:11.5px;color:var(--muted)}
+.presets button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.est{margin:0;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.est:empty{display:none}
+.stepnav{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;gap:8px;background:var(--surface);padding:10px 0 calc(6px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);margin-top:4px}
+.stepnav .btn.cta{width:auto;margin-left:auto;padding:10px 22px}
+.stepnav .val{flex:1;text-align:center}
+.dseg.q button{padding:6px 10px;font-size:12px}
+.renderOut{display:flex;flex-direction:column;gap:8px;color:var(--stage-ink)}
+.renderOut .hint{color:var(--stage-ink);opacity:.75}
+.renderOut .hint:empty{display:none}
+.renderOut .prog{background:rgba(255,255,255,.12)}
+.renderOut .btn:not(.cta){background:rgba(255,255,255,.1);border-color:transparent;color:#fff}
+.renderOut video{max-height:360px}
+
+/* ---------- phones and narrow windows: the preview stays on top while the steps scroll under it ---------- */
+@media (max-width:940px), (hover:none) and (pointer:coarse){
+  .wrap{padding-block:10px 0;gap:10px}
+  .stage{position:sticky;top:0;z-index:6;border-radius:0 0 18px 18px;margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:10px 12px;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .screen{width:min(100%, calc(40dvh * var(--arn, .5625)))}
+  .screenBox{min-height:0}
+  .renderOut video{max-height:24dvh}
+  .zlane{height:50px}
+}
+/* ---------- zone lane: fixed playhead in the middle, the strip slides under it ---------- */
+.rail{display:contents}
+.zlaneWrap{position:relative}
+.zlane{scrollbar-width:none;touch-action:pan-x;-webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+.zlane::-webkit-scrollbar{display:none}
+.zlaneHead{left:50%;top:0;bottom:0;transform:translateX(-1px);z-index:3}
+.zlaneHead::before{content:"";position:absolute;left:-5px;top:0;border:6px solid transparent;border-bottom:0;border-top-color:var(--accent)}
+.lz{transition:transform .18s,box-shadow .18s,filter .18s}
+.lz.cur{transform:translateY(-2px);box-shadow:inset 0 0 0 2px #fff,0 6px 16px rgba(0,0,0,.45)}
+.lz .h{touch-action:pan-x}
+.lz.drag{transform:translateY(-3px) scale(1.02)}
+#steps .ico,#steps [data-s="adv"]{display:none}
+.advmode #steps{display:none}
+
+/* ---------- full screen preview ---------- */
+.stage:fullscreen,.stage.pfs{position:fixed;inset:0;z-index:100;margin:0;border-radius:0;background:#000;display:flex;flex-direction:column;justify-content:center;gap:10px;
+  padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.stage:fullscreen .modebar,.stage.pfs .modebar,.stage:fullscreen .renderOut,.stage.pfs .renderOut{display:none}
+.stage:fullscreen .screen,.stage.pfs .screen{width:min(100%, calc((100dvh - 170px) * var(--arn, .5625)))}
+.stage:fullscreen .screen canvas,.stage.pfs .screen canvas{cursor:pointer}
+body.fs{overflow:hidden}
+
+@media (max-width:600px), (hover:none) and (pointer:coarse){
+  header{display:none}
+  /* app shell like a mobile editor: the preview on top, the settings scroll in their own area, tabs at the bottom */
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  .wrap{height:100vh;height:100dvh;padding:0;gap:0;max-width:none}
+  .layout{flex:1;min-height:0;display:flex;flex-direction:column;align-items:stretch;gap:0}
+  .stage{position:relative;top:auto;flex:none;margin:0}
+  /* stage like a mobile editor: icon rails left and right of the picture, controls and the zone lane below */
+  .stage{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;grid-template-areas:"l s r" "t t t" "z z z" "o o o";column-gap:6px;row-gap:8px;padding:8px 8px 10px}
+  .modebar{display:contents}
+  .modebar .hint{display:none}
+  .rail{display:flex;flex-direction:column;align-items:center;gap:8px;align-self:center}
+  .rl{grid-area:l}
+  .rr{grid-area:r}
+  .rail .dseg{flex-direction:column;padding:3px;gap:3px}
+  .rail .dseg button{width:38px;height:38px;padding:0;justify-content:center;border-radius:9px}
+  .rail .dseg button span{display:none}
+  .rail .dseg .ico{width:19px;height:19px}
+  .screenBox{grid-area:s;min-height:0}
+  .screen{width:min(100%, calc(46dvh * var(--arn, .5625)))}
+  .transport{grid-area:t;gap:8px}
+  .zlaneBox{grid-area:z;margin-top:0;padding:4px 0;background:transparent;border:0}
+  .zlaneTop,.tlwrap,#laneBtn,#frameQuick{display:none}
+  .zlane{height:54px}
+  .lz{top:7px}
+  .lz .h{width:16px}
+  .renderOut{grid-area:o}
+  body.editing .zlaneBox{display:none!important}
+  .tbtn{width:40px;height:40px}
+  .tbtn.primary{width:46px;height:46px}
+  .time{flex:1;text-align:center;font-size:12px}
+  .stage:fullscreen,.stage.pfs{display:flex}
+  /* the step bar becomes a bottom tab bar */
+  .paneltop,.stepnav{display:none}
+  #steps,.advmode #steps{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;margin:0;gap:0;padding:5px 4px calc(5px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.18)}
+  #steps button,#steps [data-s="adv"]{display:flex;flex:1 1 0;min-width:0;padding:4px 0;gap:2px;font-size:10.5px;border-radius:10px}
+  #steps button i{display:none}
+  #steps .ico{display:block;width:22px;height:22px}
+  #steps button[aria-current="step"],#steps button[aria-current="page"]{color:var(--accent)}
+  #steps button.done{color:var(--ink)}
+  body.fs #steps{display:none}
+  #steps{justify-content:center}
+  #steps button,#steps [data-s="adv"]{max-width:120px}
+  .panel{flex:1;min-height:0;width:100%;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+    border:0;border-radius:0;background:var(--bg);padding:10px max(14px,calc((100% - 760px) / 2)) calc(76px + env(safe-area-inset-bottom,0px))}
+  .btn{min-height:38px}
+  .btn.small{min-height:34px}
+  .seg button{padding:9px 0}
+  select{padding:8px}
+  input[type=range]{height:28px}
+  .row.sl{grid-template-columns:minmax(0,1fr) minmax(90px,150px) 44px}
+  .presets{grid-template-columns:1fr}
+  .drop{padding:18px 12px}
+  .renderOut .hint{font-size:11.5px}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .stage{position:static}
+  .screen{width:min(100%, calc(80dvh * var(--arn, .5625)))}
+}
+/* phones on their side: the preview on the left, the settings on the right */
+@media (max-height:520px) and (orientation:landscape) and (hover:none) and (pointer:coarse){
+  .layout{flex-direction:row}
+  .stage{flex:0 0 56%;max-height:100dvh;overflow-y:auto;border-radius:0}
+  .screen{width:min(100%, calc(62dvh * var(--arn, .5625)))}
+}
+
+/* ---------- rendering on phones and tablets: full-screen picture, progress and cancel only ---------- */
+.renderHud{position:fixed;inset:0;z-index:120;pointer-events:auto;display:flex;align-items:flex-end;justify-content:center;touch-action:none;user-select:none;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) max(18px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:linear-gradient(transparent 62%,rgba(0,0,0,.7))}
+.rhBox{width:min(100%,420px);display:flex;flex-direction:column;gap:10px;background:rgba(20,16,26,.75);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:16px;padding:14px;color:#fff}
+.rhTop{display:flex;align-items:baseline;gap:10px}
+.rhTop b{font:600 26px var(--display);font-variant-numeric:tabular-nums}
+.rhTop span{font-size:12.5px;opacity:.8}
+.rhBox .prog{background:rgba(255,255,255,.15)}
+.rhBox .btn{justify-content:center;background:rgba(255,255,255,.12);border-color:transparent;color:#fff;min-height:44px}
+.stage.rendering{justify-content:flex-start;padding-top:max(14px,env(safe-area-inset-top,0px))}
+.stage.rendering .modebar,.stage.rendering .transport,.stage.rendering .zlaneBox,.stage.rendering .renderOut{display:none!important}
+.stage.rendering .screen{width:min(100%, calc((100dvh - 200px) * var(--arn, .5625)));pointer-events:none}
+body.rendering{touch-action:none;overscroll-behavior:none}
