@@ -19,3 +19,5 @@ export function smoothstep2(a,b,x){return smooth(clamp((x-a)/(b-a),0,1))}
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export const VNT=new Float32Array(4096);{const r=rngOf(99);for(let i=0;i<4096;i++)VNT[i]=r()}
 export function vnA(x){const i=Math.floor(x),f=x-i,u=f*f*(3-2*f),a=VNT[i&4095],b=VNT[(i+1)&4095];return a+(b-a)*u}
+/* a video length for the sliders: "45 с", "2 хв", "2 хв 30 с" */
+export const durLabel=v=>{v=Math.round(+v);return v<60?v+' с':Math.floor(v/60)+' хв'+(v%60?' '+(v%60)+' с':'')};

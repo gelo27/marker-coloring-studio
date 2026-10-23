@@ -60,7 +60,8 @@ export function drawZoneBars(){const el=$('zbars');syncLaneBox();if(!el||!plan||
     d.onclick=e=>{e.stopPropagation();if(busy)return;if(ed.on)setMode('anim');seek(a)};el.appendChild(d)});
   drawLane()}
 export function drawLane(){const el=$('zlaneIn'),sc=$('zlane');if(!el||!plan||!laneOpen())return;el.innerHTML='';const pad=Math.round(sc.clientWidth/2);let x=pad;LANE.items=[];LANE.cur=-1;
-  plan.order.forEach((r,k)=>{const a=plan.vOf(r.t0),b=plan.vOf(r.t1),dur=b-a,w=Math.max(30,dur*LANE.pps),d=document.createElement('div');d.className='lz';d.style.left=x+'px';d.style.width=w+'px';
+  // with several painters the lane shows the lead one's zones (its blocks follow each other in time)
+  (plan.tracks&&plan.tracks.length>1?plan.tracks[0]:plan.order).forEach((r,k)=>{const a=plan.vOf(r.t0),b=plan.vOf(r.t1),dur=b-a,w=Math.max(30,dur*LANE.pps),d=document.createElement('div');d.className='lz';d.style.left=x+'px';d.style.width=w+'px';
     const z=zoneByI.get(r.i),tm=z&&z.tmul||1;d.style.setProperty('--c',r.color);
     d.innerHTML='<b>'+(k+1)+'</b><span>'+dur.toFixed(1)+' с'+(Math.abs(tm-1)>.01?' · ×'+tm.toFixed(2):'')+'</span><i class="h" title="Тягніть, щоб змінити час зони"></i>';d.title='Зона №'+(k+1)+' · '+dur.toFixed(2)+' с';
     LANE.items.push({x,w,a,b,el:d});

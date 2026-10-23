@@ -201,3 +201,7 @@ body.rendering{touch-action:none;overscroll-behavior:none}
 .tgrid button[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 2px var(--accent)}
 .tgrid button[aria-checked="true"] b{color:var(--accent)}
 .tgrid button:active{transform:scale(.97)}
+/* ---------- addons (characters) ---------- */
+.addons{display:flex;flex-direction:column;gap:10px}
+.addbox{display:flex;flex-direction:column;gap:10px;background:var(--chip);border-radius:12px;padding:10px}
+.addset{display:flex;flex-direction:column;gap:6px}

@@ -1,7 +1,8 @@
+import {addonOn} from '../addons/registry.js';
 import {SND} from '../audio/audio.js';
 import {drawMask,extractLines,loadArtFromImage} from '../core/segment.js';
 import {IMP,OUT,PREV,S,SHADE,TOOLS,isMobileUI,view} from '../core/settings.js';
-import {$,clamp,mk} from '../core/utils.js';
+import {$,clamp,durLabel,mk} from '../core/utils.js';
 import {GROUP_RULES,applyPalette,applySrcColors,art,colorGroups,groupedOrder,nextPalSeed,orderFromGroups,orderMode,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setZoneColor,zoneByI,zones} from '../core/zones.js';
 import {buildDemo} from '../data/demoArt.js';
 import {drawBrush,ed} from '../editor/editor.js';
@@ -104,7 +105,7 @@ function renderGroups(){
 export function syncOrderUI(){if(WZ.step!==4||!seg)return;
   $('wOrderRule').value=orderMode==='color'?'groups':orderMode;$('wGroupRuleRow').hidden=orderMode!=='groups';renderGroups();ed.dirtyPaint=true}
 function syncCam(){setSegValue('wCamMode',S.camMode);setSegValue('camMode',S.camMode);
-  $('wCamHint').textContent=S.camMode==='nib'?'Макрозйомка: камера весь час веде кінчик інструмента, у кадрі лише його передня половина. Крупні й загальні плани зон нижче діють лише в режимі «Монтаж».':'Камера змінює плани: загальні, середні й крупні, зі склейками між ними. Пензликом нижче задайте, які зони показати крупно.';
+  $('wCamHint').textContent=S.camMode==='cat'?(addonOn('cat')?'Камера тримає в кадрі котика, який зараз малює, разом із ділянкою під його інструментом; на фіналі — всю компанію.':'«Котик крупно» працює, коли на кроці 1 вибрано котиків; без них камера знімає як «Перо крупно».'):S.camMode==='nib'?'Макрозйомка: камера весь час веде кінчик інструмента, у кадрі лише його передня половина. Крупні й загальні плани зон нижче діють лише в режимі «Монтаж».':'Камера змінює плани: загальні, середні й крупні, зі склейками між ними. Пензликом нижче задайте, які зони показати крупно.';
   [...$('wTags').children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===WZ.tag.k&&b.dataset.v===WZ.tag.v)));
   $('wFast').value=S.fastMul;$('wFastV').textContent='×'+(+S.fastMul).toFixed(1);
   const fm=$('flyMode').querySelector('[aria-pressed="true"]');setSegValue('wFly',fm?fm.dataset.v:'before')}
@@ -115,7 +116,7 @@ function syncExport(){['res','fps','vq'].forEach(k=>{$('w'+k[0].toUpperCase()+k.
 export function syncWizard(){
   if(!$('wiz'))return;const n=WZ.step;
   setSegValue('wFormats',view.fmt);
-  if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=S.duration+' с';[...$('wToolGrid').children].forEach(b=>b.setAttribute('aria-checked',String(b.dataset.t===S.tool)))}
+  if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=durLabel(S.duration);[...$('wToolGrid').children].forEach(b=>b.setAttribute('aria-checked',String(b.dataset.t===S.tool)))}
   else if(n===2){zoneStats();if(WZ.maskUI)WZ.maskUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
     $('wMinArea').value=IMP.minArea;$('wMinAreaV').textContent=IMP.minArea;setSegValue('wZoneView',ed.view==='final'?'final':'map')}
   else if(n===3){renderWPal();$('wShadeRow').hidden=!(art&&art.colored);$('wShade').checked=SHADE.on;$('wUndo').disabled=!WZ.undo.length}
@@ -141,7 +142,7 @@ export function bindWizard(onPreview){
   // step 1
   $('wDemo').onclick=()=>{if(busy)return;setArt(buildDemo(),false,()=>{$('wArtInfo').textContent='Демо: ведмежа на капкейку. Далі — перевірка зон.'})};
   $('wFormats').onclick=e=>{const b=e.target.closest('button');if(b)$('formats').querySelector('[data-f="'+b.dataset.f+'"]').click();syncWizard()};
-  $('wDur').oninput=e=>{$('wDurV').textContent=e.target.value+' с'};$('wDur').onchange=e=>{$('dur').value=e.target.value;$('dur').dispatchEvent(new Event('change'))};
+  $('wDur').oninput=e=>{$('wDurV').textContent=durLabel(e.target.value)};$('wDur').onchange=e=>{$('dur').value=e.target.value;$('dur').dispatchEvent(new Event('change'))};
   // tool tiles with square previews; they drive the tool buttons of the full settings
   $('wToolGrid').innerHTML=Object.keys(TOOLS).map(k=>'<button role="radio" data-t="'+k+'" aria-checked="false" title="'+TOOLS[k].sub+'"><img class="tthumb" data-tool-thumb="'+k+'" alt="" width="96" height="96"><b>'+TOOLS[k].name+'</b></button>').join('');
   $('wToolGrid').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;const t=$('toolSeg').querySelector('[data-t="'+b.dataset.t+'"]');if(t)t.click();syncWizard()};

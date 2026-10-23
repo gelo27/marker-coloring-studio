@@ -1,6 +1,7 @@
+import {addonFocus} from '../addons/registry.js';
 import {flyPose,paperRot,plan,viewFit} from '../core/plan.js';
 import {S,TOOLS,view} from '../core/settings.js';
-import {legPt} from '../core/strokes.js';
+import {STROKE,legPt} from '../core/strokes.js';
 import {SS,TAU,clamp,ease3,lerp,smooth} from '../core/utils.js';
 import {seg} from '../core/zones.js';
 import {GL,glueGeo,pourAt} from './glitter.js';
@@ -8,25 +9,31 @@ import {liqPenColor} from './liquid.js';
 import {legAt} from './paint.js';
 import {TOOL_LEN} from './toolSprites.js';
 /* ================= PEN & CAMERA ================= */
-export function regionPoint(r,p){if(p>=1){const l=r.legs[r.legs.length-1];return{x:l.p1[0],y:l.p1[1],kind:'end',k:r.legs.length}}const{k,f}=legAt(r,p);const l=r.legs[k];const q=legPt(l,f);return{x:q[0],y:q[1],kind:l.kind,k}}
-export function penState(c){
-  const o=plan.order,W=seg.W,H=seg.H,off={x:W*1.15,y:H*1.12};
+export function regionPoint(r,p){if(p>=1){const l=r.legs[r.legs.length-1];return{x:l.p1[0],y:l.p1[1],kind:'end',k:r.legs.length}}const{k,f}=legAt(r,p);const l=r.legs[k];const q=legPt(l,f);return{x:q[0],y:q[1],kind:l.kind,k,f}}
+/* where a painter stands for leg l at fraction f: carried between the two stands on a walking leg */
+function standAt(l,f){if(!l)return undefined;if(!l.st0||f==null)return l.st;return[lerp(l.st0[0],l.st[0],f),lerp(l.st0[1],l.st[1],f)]}
+/* where painter k (0 = the lead one) has its tool at plan time c */
+export function penState(c,k){
+  const o=plan.tracks?plan.tracks[k||0]||[]:plan.order,W=seg.W,H=seg.H,off={x:W*1.15,y:H*1.12};
   if(!o.length)return{x:off.x,y:off.y,h:1,color:'#888',kind:'air',lid:-1};
   const first=o[0];
-  if(c<first.t0){const s=first.legs[0].p0;const u=smooth(clamp((c-.3)/(first.t0-.3),0,1));const h=1-smooth(clamp((c-(first.t0-.35))/.35,0,1));return{x:lerp(off.x,s[0],u),y:lerp(off.y,s[1],u),h:Math.max(h,0),color:first.color,kind:'air',lid:-1,tool:first.tool}}
+  if(c<first.t0){const s=first.legs[0].p0;const u=STROKE.reach>0?1:smooth(clamp((c-.3)/(first.t0-.3),0,1));const h=1-smooth(clamp((c-(first.t0-.35))/.35,0,1));return{x:lerp(off.x,s[0],u),y:lerp(off.y,s[1],u),h:Math.max(h,0),color:first.color,kind:'air',lid:-1,tool:first.tool}}
   let lo=0,hi=o.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(o[m].t0-o[m].travel<=c)lo=m;else hi=m-1}
   const r=o[lo];
-  if(c<r.t0&&lo>0){const pr=o[lo-1],e=pr.legs[pr.legs.length-1].p1,s=r.legs[0].p0;const u=clamp((c-pr.t1)/(r.t0-pr.t1),0,1);const e2=S.human?ease3(u):smooth(u);
+  if(c<r.t0&&lo>0){const pr=o[lo-1],e=pr.legs[pr.legs.length-1].p1,s=r.legs[0].p0,t1r=Math.min(pr.t1+(r.rest||0)+(r.wait||0),r.t0-.05);
+    // a rest (yawn and stretch) and/or waiting for another painter to move on: the tool stays where the last zone ended
+    if(c<t1r&&(r.rest||r.wait))return{x:e[0],y:e[1],h:.07,color:pr.color,kind:'pause',lid:-1,tool:pr.tool,rest:c<pr.t1+(r.rest||0)};
+    const u=clamp((c-t1r)/(r.t0-t1r),0,1);const e2=S.human?ease3(u):smooth(u);
     let x=lerp(e[0],s[0],e2),y=lerp(e[1],s[1],e2);
     if(S.human){const dx=s[0]-e[0],dy=s[1]-e[1],L=Math.hypot(dx,dy)||1;const Hh=S.hum,arc=Math.sin(Math.PI*u)*Math.min(L*.18,120*SS)*(.4+Hh.jitter*1.3);x+=-dy/L*arc;y+=dx/L*arc;
       if(u>.7){const hv=(u-.7)/.3;x+=Math.sin(hv*TAU*1.5)*8*SS*(1-hv)*(.3+Hh.pauses*1.8);y+=Math.cos(hv*TAU*1.5)*6*SS*(1-hv)*(.3+Hh.pauses*1.8)}}
-    return{x,y,h:Math.pow(Math.sin(Math.PI*u),.7),color:u<.5?pr.color:r.color,kind:'air',lid:-1,tool:u<.5?pr.tool:r.tool}}
+    return{x,y,h:Math.pow(Math.sin(Math.PI*u),.7),color:u<.5?pr.color:r.color,kind:'air',lid:-1,tool:u<.5?pr.tool:r.tool,tf:u}}
   if(c<=r.t1){const SD=r.dur*r.sf,pp=(c-r.t0)/SD;
     if(pp>1&&r.sf<1){const s=clamp((c-r.t0-SD)/(r.dur*(1-r.sf)),0,1),e=r.legs[r.legs.length-1].p1,G=glueGeo(r);let q;
       if(s<GL.p0)q=(()=>{const a=pourAt(G,0),u=smooth(s/GL.p0);return[lerp(e[0],a[0],u),lerp(e[1],a[1],u)]})();else q=pourAt(G,clamp((s-GL.p0)/G.span,0,1));
       return{x:q[0],y:q[1],h:1,color:r.color,kind:'air',lid:-1,tool:r.tool,jar:s,jr:r}}
-    const q=regionPoint(r,pp);return{x:q.x,y:q.y,h:q.kind==='jump'?.35:q.kind==='pause'?.07:0,kind:q.kind,lid:lo*100000+q.k,tool:r.tool,drop:!!(r.legs[q.k]&&r.legs[q.k].drop),color:TOOLS[r.tool].fluid?liqPenColor(r,pp):r.color}}
-  const e=r.legs[r.legs.length-1].p1;const u=smooth(clamp((c-r.t1-.25)/1.4,0,1));const h=smooth(clamp((c-r.t1)/.3,0,1));return{x:lerp(e[0],off.x*1.1,u),y:lerp(e[1],off.y*1.1,u),h,color:r.color,kind:'air',lid:-1,tool:r.tool};
+    const q=regionPoint(r,pp);return{x:q.x,y:q.y,h:q.kind==='jump'?.35:q.kind==='pause'?.07:0,kind:q.kind,lid:lo*100000+q.k,tool:r.tool,stand:standAt(r.legs[q.k],q.f),tf:q.kind==='jump'&&r.legs[q.k]&&r.legs[q.k].st0?q.f:undefined,rest:!!(r.legs[q.k]&&r.legs[q.k].rest),drop:!!(r.legs[q.k]&&r.legs[q.k].drop),color:TOOLS[r.tool].fluid?liqPenColor(r,pp):r.color}}
+  const e=r.legs[r.legs.length-1].p1;const u=STROKE.reach>0?0:smooth(clamp((c-r.t1-.25)/1.4,0,1));const h=smooth(clamp((c-r.t1)/.3,0,1));return{x:lerp(e[0],off.x*1.1,u),y:lerp(e[1],off.y*1.1,u),h,color:r.color,kind:'air',lid:-1,tool:r.tool};
 }
 export const cam={x:0,y:0,z:1,ax:0,ay:0,shot:-1,vx:0,vy:0,lastCut:-9,lastTrans:'cut',whip:null,leak:false,leakPos:[0,0],leakHue:0};
 export function shotIndex(c){const s=plan.shots;let k=0;for(let i=0;i<s.length;i++)if(s[i].ts<=c)k=i;return k}
@@ -43,6 +50,8 @@ export function camFocus(c,dt,snap){const W=seg.W,H=seg.H,pr=S.human?paperRot(c)
 /* "nib" camera: a macro shot that keeps the tip at a fixed spot of the frame, zoomed so the frame edge cuts the tool
    in half: only the working end is ever visible. Returns the camera centre (page space) and zoom for a pen state. */
 export const NIB={ax:.42,ay:.4};
+/* page point → camera target in world space (the paper may be turned) */
+function pageTarget(q,c){const pr=S.human?paperRot(c):0,cx=seg.W/2,cy=seg.H/2,cs=Math.cos(pr),sn=Math.sin(pr);return[cx+(q[0]-cx)*cs-(q[1]-cy)*sn,cy+(q[0]-cx)*sn+(q[1]-cy)*cs,q[2]]}
 export function nibTarget(st,c){const pr=S.human?paperRot(c):0,cx=seg.W/2,cy=seg.H/2,cs=Math.cos(pr),sn=Math.sin(pr);
   const wx=cx+(st.x-cx)*cs-(st.y-cy)*sn,wy=cy+(st.x-cx)*sn+(st.y-cy)*cs;
   const pp=S.fx.persp.on?S.fx.persp.v:0,a=.64-(.08+.42*pp)*.55;
@@ -56,10 +65,13 @@ export function camStep(v,dt){
   if(sh.fly){let fresh=false;if(k!==cam.shot){const was=cam.shot;cam.shot=k;fresh=true;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.leak=!!sh.leak;cam.leakPos=sh.leakPos;cam.leakHue=sh.leakHue;cam.whip=null}
     const u=clamp((c-sh.ts)/sh.dur,0,1),e=u*.7+.3*smooth(u),p=flyPose(sh,e);cam.x=p[0];cam.y=p[1];cam.z=p[2];cam.ax=cam.x;cam.ay=cam.y;
     if(fresh||dt<=0){cam.vx=0;cam.vy=0}else{cam.vx=(cam.x-px)/dt;cam.vy=(cam.y-py)/dt}return}
-  if(S.camMode==='nib'&&!sh.intro&&!sh.outro){const T=nibTarget(st,c),was=cam.shot,fresh=!cam.nib||dt<=0||(k!==was&&sh.cutTs!=null);cam.nib=true;cam.shot=k;cam.ax=st.x;cam.ay=st.y;
-    if(fresh){cam.x=T[0];cam.y=T[1];cam.z=T[2];cam.vx=cam.vy=0;cam.whip=null;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.fax=st.x;cam.fay=st.y;camFocus(c,0,was<0?true:'rack');return}
-    const kp=1-Math.exp(-7*dt),kz=1-Math.exp(-2.5*dt),kf=1-Math.exp(-4*dt);cam.x+=(T[0]-cam.x)*kp;cam.y+=(T[1]-cam.y)*kp;cam.z+=(T[2]-cam.z)*kz;
-    cam.fax+=(st.x-cam.fax)*kf;cam.fay+=(st.y-cam.fay)*kf;cam.vx=(cam.x-px)/dt;cam.vy=(cam.y-py)/dt;camFocus(c,dt,false);return}
+  const camT=S.camMode==='cat'?addonFocus(c):null;
+  if((S.camMode==='nib'||S.camMode==='cat')&&!sh.intro&&!sh.outro){const T=camT?pageTarget(camT,c):nibTarget(st,c),was=cam.shot,fresh=!cam.nib||dt<=0||(k!==was&&sh.cutTs!=null)||(camT&&Math.hypot(T[0]-cam.x,T[1]-cam.y)*viewFit()*cam.z>view.W*.2);cam.nib=true;cam.shot=k;cam.ax=st.x;cam.ay=st.y;
+    // focus: the nib camera focuses the tip; the cat camera the cat it films (the frame centre), not the tool below it
+    const FX=camT?camT[0]:st.x,FY=camT?camT[1]:st.y;
+    if(fresh){cam.x=T[0];cam.y=T[1];cam.z=T[2];cam.vx=cam.vy=0;cam.whip=null;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.fax=FX;cam.fay=FY;camFocus(c,0,was<0?true:'rack');return}
+    const kp=camT?1:1-Math.exp(-7*dt),kz=camT?1:1-Math.exp(-2.5*dt),kf=1-Math.exp(-4*dt);cam.x+=(T[0]-cam.x)*kp;cam.y+=(T[1]-cam.y)*kp;cam.z+=(T[2]-cam.z)*kz;
+    cam.fax+=(FX-cam.fax)*kf;cam.fay+=(FY-cam.fay)*kf;cam.vx=(cam.x-px)/dt;cam.vy=(cam.y-py)/dt;camFocus(c,dt,false);return}
   cam.nib=false;
   if(k!==cam.shot){const was=cam.shot;cam.shot=k;
     if(sh.trans!=='glide'||was<0){

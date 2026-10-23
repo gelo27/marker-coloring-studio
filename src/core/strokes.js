@@ -219,11 +219,40 @@ export function addTouchups(r,legs,gaps,w,rnd,H,it){
       const dd=Math.hypot(a[0]-cur[0],a[1]-cur[1]);legs.push(mkLeg(cur,a,dd>w*1.5?'jump':'link',0,.76,1));
       legs.push(mkLeg(a,b,'run',0,H.on?.8+rnd()*.1:.84,1.06));cur=b}}
 }
+/* reach: when a character paints (e.g. a cat), how far its paws reach from where it stands (page px); 0 = a hand */
+export const STROKE={reach:0,walkK:0};
+/* Fill for a character that walks on the page: the zone is cut into patches as big as its reach (jittered grid,
+   nearest seed), visited row by row in a serpentine; each patch is hatched in one direction while the painter stands
+   still. Every leg remembers its stand point (l.st), which the character walks to. */
+export function reachFill(r,legs,w,spacing,rnd,H,dir,Rch,opt){
+  const W=seg.W,cell=Math.max(w*3,Rch*1.5),gx=Math.max(1,Math.ceil((r.x1-r.x0+1)/cell)),gy=Math.max(1,Math.ceil((r.y1-r.y0+1)/cell)),sd=[];
+  for(let j=0;j<gy;j++)for(let i=0;i<gx;i++)sd.push([r.x0+(i+.5+(rnd()-.5)*.5)*cell,r.y0+(j+.5+(rnd()-.5)*.5)*cell]);
+  const near=(x,y)=>{const ci=clamp(Math.floor((x-r.x0)/cell),0,gx-1),cj=clamp(Math.floor((y-r.y0)/cell),0,gy-1);let bi=0,bd=1e18;
+    for(let j=Math.max(0,cj-1);j<=Math.min(gy-1,cj+1);j++)for(let i=Math.max(0,ci-1);i<=Math.min(gx-1,ci+1);i++){const q=sd[j*gx+i],d=(x-q[0])**2+(y-q[1])**2;if(d<bd){bd=d;bi=j*gx+i}}return bi};
+  const st=Math.max(2,Math.round(w*.3)),acc=sd.map(()=>({n:0,sx:0,sy:0,x0:1e9,y0:1e9,x1:-1,y1:-1}));
+  for(let y=r.y0;y<=r.y1;y+=st)for(let x=r.x0;x<=r.x1;x+=st){if(!inR(r,y*W+x))continue;const a=acc[near(x,y)];a.n++;a.sx+=x;a.sy+=y;if(x<a.x0)a.x0=x;if(x>a.x1)a.x1=x;if(y<a.y0)a.y0=y;if(y>a.y1)a.y1=y}
+  const subs=[];acc.forEach((a,idx)=>{if(!a.n)return;const row=Math.floor(idx/gx),col=idx%gx;
+    subs.push({i:r.i,lk:r.lk,pf:p=>{if(r.pf&&!r.pf(p))return false;const x=p%W;return near(x,(p-x)/W)===idx},x0:Math.max(0,a.x0-st),y0:Math.max(0,a.y0-st),x1:Math.min(W-1,a.x1+st),y1:Math.min(seg.H-1,a.y1+st),cx:a.sx/a.n,cy:a.sy/a.n,area:a.n*st*st,ord:row*gx+(row%2?gx-1-col:col)})});
+  subs.sort((a,b)=>a.ord-b.ord);
+  subs.forEach(q=>{const k0=legs.length;hatch(q,legs,w,dir+(rnd()-.5)*.2*H.dirVar,spacing,rnd,H,{alpha:opt.alpha,wm:opt.wm,uni:false});for(let k=k0;k<legs.length;k++)legs[k].st=[q.cx,q.cy]});
+  return subs.length>0}
+/* a painter carries the tool from one stand point to the next: wherever the tip would leap (legs that do not join up)
+   or the stand changes, a lifted 'jump' leg links them; it remembers both stands (st0 -> st) and how far the painter
+   walks, so it gets walking time (STROKE.walkK = pen-path px per px walked) and the body is carried along smoothly */
+function walkLegs(legs){const outL=[];let prev=null;
+  for(const l of legs){if(prev){const gap=Math.hypot(l.p0[0]-prev.p1[0],l.p0[1]-prev.p1[1]),moved=prev.st!==l.st,wd=moved?Math.hypot(l.st[0]-prev.st[0],l.st[1]-prev.st[1]):0;
+      if(gap>1||moved){if((l.kind==='jump'||l.kind==='link')&&gap<=1){if(moved){l.kind='jump';l.alpha=0;l.st0=prev.st;l.walk=wd}}
+        else{const j=mkLeg(prev.p1,l.p0,'jump',0,.76,1);j.st=l.st;if(moved){j.st0=prev.st;j.walk=wd}outL.push(j)}}}
+    outL.push(l);prev=l}
+  legs.length=0;legs.push(...outL)}
+/* legs without a stand point (outlines, shadows, touch-ups): the painter stays put while the tip is within reach,
+   then steps to where the tip is going */
+function assignStands(legs,Rch){let a=null;for(const l of legs){if(l.st){a=l.st;continue}const p=l.p1;if(!a||Math.hypot(p[0]-a[0],p[1]-a[1])>Rch*.85)a=[(l.p0[0]+p[0])/2,(l.p0[1]+p[1])/2];l.st=a}}
 export function buildPath(r,H,seed){
-  const key=(r.tool||S.tool)+'|'+JSON.stringify(H)+'|'+seed+'|'+r.lk;
+  const key=(r.tool||S.tool)+'|'+JSON.stringify(H)+'|'+seed+'|'+r.lk+'|'+STROKE.reach+'|'+STROKE.walkK+'|'+(S.wideBig!==false);
   if(r.pathKey===key)return;
   const rnd=rngOf(r.i*7919+seed*31+(H.on?17:3));
-  const T=TOOLS[r.tool||S.tool];const w=r.w=clamp(Math.sqrt(r.lk>=0&&r.pArea?r.pArea:r.area)*.085,9*SS,34*SS)*T.wMul;
+  const T=TOOLS[r.tool||S.tool];const w=r.w=clamp(Math.sqrt(r.lk>=0&&r.pArea?r.pArea:r.area)*.085,9*SS,STROKE.reach>0||S.wideBig===false?17*SS:34*SS)*T.wMul;
   const base=r.elong>.25?r.ang:-.62;
   const dir=base+(rnd()-.5)*(.35+H.dirVar*1.3);
   const legs=[],P=H.pressure;
@@ -235,7 +264,9 @@ export function buildPath(r,H,seed){
     let tot=W8.reduce((a,b)=>a+b[1],0),x=rnd()*tot;mode='hatch';for(const [m,p] of W8){if((x-=p)<0){mode=m;break}}}
   if(mode==='circles'&&r.area>Math.pow(220*SS,2))mode='patches';
   r.hdir=dir;
-  if(r.shadowOf&&r.vsStyle==='hatch'){const w2=Math.max(2.6*SS,w*.24);r.w=w2;hatch(r,legs,w2,r.vsDir,3.4,rnd,H,{alpha:()=>.92,wm:()=>1,uni:true});r.hdir=null}
+  const Rch=STROKE.reach;
+  if(Rch>0&&!r.shadowOf&&r.area>Math.pow(Rch*1.1,2)&&reachFill(r,legs,w,T.spacing,rnd,H,-.62+(rnd()-.5)*.3,Rch,{alpha,wm}))r.hdir=null;
+  else if(r.shadowOf&&r.vsStyle==='hatch'){const w2=Math.max(2.6*SS,w*.24);r.w=w2;hatch(r,legs,w2,r.vsDir,3.4,rnd,H,{alpha:()=>.92,wm:()=>1,uni:true});r.hdir=null}
   else if(r.shadowOf){radialFill(r,legs,w,T.spacing*.95,rnd,H);r.hdir=null}
   else if(H.on&&small&&T.scribble!==false&&rnd()<.4+.5*H.jitter){legs.push(...scribble(r,w,rnd,H))}
   else if(mode==='radial'){radialFill(r,legs,w,T.spacing*.95,rnd,H);r.hdir=null}
@@ -248,9 +279,10 @@ export function buildPath(r,H,seed){
       hatch(r,legs,w,dir+(rnd()<.5?1:-1)*(1.05+rnd()*.35),T.spacing*1.35,rnd,H,{alpha:()=>alpha()*.55,wm,uni:rnd()<.5,cross:true});
   }
   if((H.touch!==false||!H.on)&&r.vsStyle!=='hatch')for(let it=0;it<2;it++){const gaps=coverageGaps(r,legs,T);if(!gaps.length)break;addTouchups(r,legs,gaps,w,rnd,H,it)}
+  if(Rch>0){assignStands(legs,Rch);walkLegs(legs)}
   let tw=0;
   legs.forEach(l=>{let wt=l.cw?l.len*1.1+w*.01:l.kind==='run'?l.len+w*1.6:l.kind==='link'?l.len*.8+w*.7:l.kind==='trace'?(l.len*1.25+w*.15)*(l.slow||1):l.kind==='pause'?l.wt0:l.len*.35+w*1.2;
-    if(H.on&&l.kind!=='pause')wt*=clamp(1+(rnd()-.5)*.8*H.tempo,.5,1.6);l.wt=wt;tw+=wt});
+    if(H.on&&l.kind!=='pause')wt*=clamp(1+(rnd()-.5)*.8*H.tempo,.5,1.6);if(l.walk)wt+=l.walk*STROKE.walkK*1.15/Math.min(1.47,1+l.walk/(4*STROKE.reach/.33));l.wt=wt;tw+=wt});
   let acc=0;legs.forEach(l=>{l.f0=acc/tw;acc+=l.wt;l.f1=acc/tw});
   r.legs=legs;r.pathW=tw;r.pathKey=key;
 }

@@ -37,7 +37,7 @@ export const NEAT={on:false,fill:'hatch',turn:0,sloppy:0,jitter:0,tremor:0,press
 export function HP(){return S.human?Object.assign({on:true},S.hum):NEAT}
 export function zoneTool(z){return (z&&z.tool)||S.tool}
 export function zoneH(z){const st=(z&&z.style)||(S.human?'human':'neat');let H;if(st==='neat')H=Object.assign({},NEAT);else{H=Object.assign({on:true},S.hum);if(z&&z.preset&&HUM_PRESETS[z.preset])Object.assign(H,HUM_PRESETS[z.preset].v)}if(z&&z.fill)H.fill=z.fill;return H}
-export const S={tool:'marker',duration:60,montage:true,human:true,hum:Object.assign({},HUM_DEF),humPreset:'normal',fastMul:2.6,seed:1,camMode:'montage',
+export const S={tool:'marker',duration:60,montage:true,human:true,hum:Object.assign({},HUM_DEF),humPreset:'normal',fastMul:2.6,seed:1,camMode:'montage',wideBig:true,
   fx:{tilt:{on:true,v:.6},vig:{on:true,v:.45},focus:{on:true,v:.6},mblur:{on:true,v:.55},bloom:{on:true,v:.45},wet:{on:true,v:.6},ca:{on:true,v:.25},whip:{on:true,v:.5},ramp:{on:true,v:.6},persp:{on:true,v:.55},lens:{on:true,v:.5},grain:{on:true,v:.4},penblur:{on:true,v:.7}}};
 export const FX_META=[['tilt','Tilt-shift на крупних'],['vig','Віньєтка'],['focus','Перевід фокусу на склейках'],['mblur','Motion blur'],['bloom','Bloom і відблиски'],['wet','Мокрий блиск чорнила'],['ca','Хроматична аберація'],['whip','Whip-pan (частка склейок)'],['ramp','Speed-ramp (плавність)'],['persp','Камера під кутом і глибина різкості'],['lens','Оптика: дисторсія, дихання фокусу, пил'],['grain','Зерно сенсора'],['penblur','Розмиття інструмента в русі']];
 export const U={patStr:.45,patScale:1,grain:.6};

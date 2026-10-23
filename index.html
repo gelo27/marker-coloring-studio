@@ -73,7 +73,10 @@
           <div class="btns"><button class="btn small" id="wDemo">Спробувати демо</button><label class="btn small">Відкрити проєкт…<input type="file" id="wProjFile" accept=".json,application/json"></label></div>
           <span class="lbl">Формат відео</span>
           <div class="seg" id="wFormats"><button data-f="9x16">9:16</button><button data-f="4x5">4:5</button><button data-f="1x1">1:1</button><button data-f="16x9">16:9</button></div>
-          <div class="row sl"><label for="wDur">Тривалість</label><input type="range" id="wDur" min="30" max="120" step="5" value="60"><span class="val" id="wDurV">60 с</span></div>
+          <div class="row sl"><label for="wDur">Тривалість</label><input type="range" id="wDur" min="30" max="600" step="5" value="60"><span class="val" id="wDurV">60 с</span></div>
+          <p class="hint" id="wDurCat" hidden>З котиками тривалість задає їхній темп (налаштування нижче), а не цей повзунок.</p>
+          <span class="lbl">Хто малює</span>
+          <div class="addons" id="wAddons"></div>
           <span class="lbl">Чим малювати</span>
           <div class="tgrid" id="wToolGrid" role="radiogroup" aria-label="Інструмент"></div>
           <p class="hint" id="wArtInfo">Почніть із демо або завантажте свою сторінку.</p>
@@ -120,7 +123,7 @@
 
         <section class="step" data-step="5" hidden>
           <h2>Камера й швидкість</h2>
-          <div class="seg" id="wCamMode"><button data-v="montage">Монтаж</button><button data-v="nib">Перо крупно</button></div>
+          <div class="seg" id="wCamMode"><button data-v="montage">Монтаж</button><button data-v="nib">Перо крупно</button><button data-v="cat">Котик крупно</button></div>
           <p class="hint" id="wCamHint"></p>
           <span class="lbl">Пензлик налаштувань: виберіть і торкайтеся зон</span>
           <div class="tags" id="wTags">
@@ -274,7 +277,7 @@
             <button data-f="9x16" aria-pressed="true">9:16</button><button data-f="4x5" aria-pressed="false">4:5</button><button data-f="1x1" aria-pressed="false">1:1</button><button data-f="16x9" aria-pressed="false">16:9</button>
           </div>
           <div class="row"><label for="dur">Тривалість</label><span class="val" id="durV">60 с</span></div>
-          <input type="range" id="dur" min="30" max="120" step="5" value="60">
+          <input type="range" id="dur" min="30" max="600" step="5" value="60">
           <div class="row"><label for="fastMul">Прискорені зони</label><span class="val" id="fastMulV">×2.6</span></div>
           <input type="range" id="fastMul" min="1.5" max="5" step="0.1" value="2.6">
           <label class="switch"><input type="checkbox" id="montage" checked> Крупні плани та склейки</label>
@@ -282,10 +285,17 @@
       </details>
 
       <details data-tab="hand" open>
+        <summary>Персонажі</summary>
+        <div class="body addons" id="addonsA"></div>
+      </details>
+
+      <details data-tab="hand" open>
         <summary>Стиль замальовування</summary>
         <div class="body">
           <span class="lbl">Інструмент</span>
           <div class="tools" id="toolSeg"></div>
+          <label class="switch"><input type="checkbox" id="wideBig" checked> Ширший штрих на великих зонах</label>
+          <p class="hint">Вимкніть, щоб інструмент малював однаковими штрихами і на великих, і на середніх зонах (великі зони тоді замальовуються довше). У котиків штрих завжди однаковий.</p>
           <div class="humbox" id="liqBox" hidden>
             <div class="row"><label for="liqPrev">Рідка фарба: якість превʼю</label><select id="liqPrev"><option value="140" selected>Чернетка</option><option value="220">Висока</option><option value="320">Дуже висока</option><option value="440">Максимальна</option></select></div>
             <div class="row"><label for="liqMix">Рідка фарба: відтінки</label><select id="liqMix"><option value="1">Один колір</option><option value="2" selected>Два відтінки</option><option value="3">Три відтінки</option></select></div>
@@ -324,7 +334,7 @@
       <details data-tab="cam" open>
         <summary>Режим камери</summary>
         <div class="body">
-          <div class="seg" id="camMode"><button data-v="montage" aria-pressed="true">Монтаж</button><button data-v="nib" aria-pressed="false">Перо крупно</button></div>
+          <div class="seg" id="camMode"><button data-v="montage" aria-pressed="true">Монтаж</button><button data-v="nib" aria-pressed="false">Перо крупно</button><button data-v="cat" aria-pressed="false">Котик крупно</button></div>
           <p class="hint">«Перо крупно» — макрозйомка: камера весь час веде кінчик інструмента, у кадрі лише його передня половина. Початок і фінальний показ сторінки лишаються загальними планами.</p>
         </div>
       </details>

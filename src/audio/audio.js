@@ -1,3 +1,4 @@
+import {ADD,addonSpatial,prepareAddons,runHook} from '../addons/registry.js';
 import {BQ,CUR,SND_TOOLS,SR,nz,reverb,seedNoise,toolEvent,toolSnd} from './synth.js';
 import {plan,planVer} from '../core/plan.js';
 import {FLQ,OUT,S,TOOLS} from '../core/settings.js';
@@ -8,20 +9,30 @@ import {GL} from '../render/glitter.js';
 import {outroSnd} from '../render/outro.js';
 import {busy,setBusy} from '../ui/playback.js';
 export const SND={on:true,vol:.8,strokes:1,events:.8,room:.4,reverb:.35,tools:{},data:null,key:'',ctx:null,gain:null,src:null,buf:null,bufKey:'',startCtx:0,startT:0};
-export function sndKey(){return planVer+'|'+S.tool+'|'+[SND.strokes,SND.events,SND.room,SND.reverb,OUT.on,OUT.dur,OUT.text,OUT.style,FLQ.drops].join(',')+'|'+JSON.stringify(SND.tools||{})}
+export function sndKey(){return planVer+'|'+S.tool+'|'+[SND.strokes,SND.events,SND.room,SND.reverb,OUT.on,OUT.dur,OUT.text,OUT.style,FLQ.drops].join(',')+'|'+JSON.stringify(SND.tools||{})+'|'+JSON.stringify(ADD)}
 export async function genAudio(p,onProg){
   seedNoise((12345+S.seed*7919)|0||1);
   const rnd=rngOf(777+S.seed),RCS={},getRC=t=>{if(!RCS[t]){const R=SND_TOOLS[t]||SND_TOOLS.marker;RCS[t]={R,P:toolSnd(t),st:R.init(rnd),kA:1-Math.exp(-1/(SR*R.att)),kR:1-Math.exp(-1/(SR*R.rel))}}return RCS[t]};
-  // control signals from the pen at 1 kHz
-  const CR=1000,M=Math.ceil(p.total*CR)+2,px=new Float32Array(M),py=new Float32Array(M),con=new Uint8Array(M),lid=new Int32Array(M),spd=new Float32Array(M),gl=new Float32Array(M),gr=new Float32Array(M),pa=new Float32Array(M),tl=[];
-  for(let j=0;j<M;j++){const v=Math.min(j/CR,p.total),st=(OUT.on&&p.mainTotal!=null&&v>p.mainTotal)?outroSnd(v-p.mainTotal):penState(p.cOf(v));px[j]=st.x;py[j]=st.y;con[j]=((st.kind==='run'||st.kind==='link'||st.kind==='trace')&&st.h<.05)||(st.drop&&st.kind==='pause')?1:0;lid[j]=st.kind==='trace'?-7:st.lid;tl[j]=st.tool||S.tool;
-    const pan=clamp((st.x/seg.W-.5)*1.1,-.55,.55);pa[j]=pan;gl[j]=Math.cos((pan+1)*Math.PI/4);gr[j]=Math.sin((pan+1)*Math.PI/4)}
-  for(let j=1;j<M;j++)spd[j]=Math.hypot(px[j]-px[j-1],py[j]-py[j-1])*CR/SS;
-  const ka=1-Math.exp(-1/(CR*.008));for(let j=1;j<M;j++)spd[j]=spd[j-1]+(spd[j]-spd[j-1])*ka;for(let j=M-2;j>=0;j--)spd[j]=spd[j+1]+(spd[j]-spd[j+1])*ka;
-  const cs=[];for(let j=0;j<M;j++)if(con[j])cs.push(spd[j]);cs.sort((a,b)=>a-b);const norm=cs.length?Math.max(30,cs[Math.floor(cs.length*.85)]):100;
   const N=Math.ceil((p.total+.6)*SR),SL=new Float32Array(N),SRt=new Float32Array(N),EL=new Float32Array(N),ER=new Float32Array(N);
   const put=(t,dur,pan,gen,g)=>{const n0=Math.round(t*SR),len=Math.round(dur*SR),G=g==null?SND.events:g,a=Math.cos((pan+1)*Math.PI/4),b=Math.sin((pan+1)*Math.PI/4);
     for(let k=0;k<len;k++){const x=gen(k)*G,n=n0+k;if(n<0||n>=N)continue;EL[n]+=x*a;ER[n]+=x*b}};
+  // several painters working side by side (characters): every one of them gets its own stroke layer
+  // spatial audio (characters): every sound placed where it is in the camera's frame, with binaural cues - the far ear
+  // hears it a little later (interaural delay, up to 0.66 ms) and duller (head shadow); distance makes it quieter and darker
+  const SP=addonSpatial();
+  const putS=SP?(t,dur,x,y,gen,g)=>{const q=SP(x,y,p.cOf(t)),G=(g==null?SND.events:g)*q.gain,n0=Math.round(t*SR),len=Math.round(dur*SR),a=Math.cos((q.pan+1)*Math.PI/4),b=Math.sin((q.pan+1)*Math.PI/4),
+    itd=Math.round(Math.abs(q.pan)*.00066*SR),dl=q.pan>0?itd:0,dr=q.pan<0?itd:0,kl=q.lp*(q.pan>0?1-.5*q.pan:1),kr=q.lp*(q.pan<0?1+.5*q.pan:1);let yl=0,yr=0;
+    for(let k=0;k<len;k++){const x0=gen(k)*G;yl+=(x0-yl)*kl;yr+=(x0-yr)*kr;const nl=n0+k+dl,nr=n0+k+dr;if(nl>=0&&nl<N)EL[nl]+=yl*a;if(nr>=0&&nr<N)ER[nr]+=yr*b}}:null;
+  const NT=Math.max(1,(p.tracks&&p.tracks.length)||1);let ss=0,sc=0;
+  for(let trk=0;trk<NT;trk++){const tg=trk?.8:1;
+  // control signals from the pen at 1 kHz
+  const CR=1000,M=Math.ceil(p.total*CR)+2,px=new Float32Array(M),py=new Float32Array(M),con=new Uint8Array(M),lid=new Int32Array(M),spd=new Float32Array(M),gl=new Float32Array(M),gr=new Float32Array(M),pa=new Float32Array(M),kL=new Float32Array(M).fill(1),kR=new Float32Array(M).fill(1),tl=[];
+  for(let j=0;j<M;j++){const v=Math.min(j/CR,p.total),st=(!trk&&OUT.on&&p.mainTotal!=null&&v>p.mainTotal)?outroSnd(v-p.mainTotal):penState(p.cOf(v),trk);px[j]=st.x;py[j]=st.y;con[j]=((st.kind==='run'||st.kind==='link'||st.kind==='trace')&&st.h<.05)||(st.drop&&st.kind==='pause')?1:0;lid[j]=st.kind==='trace'?-7:st.lid;tl[j]=st.tool||S.tool;
+    let pan=clamp((st.x/seg.W-.5)*1.1,-.55,.55),sg=1;if(SP){const q=SP(st.x,st.y,p.cOf(v));pan=q.pan;sg=q.gain;kL[j]=q.lp*(pan>0?1-.5*pan:1);kR[j]=q.lp*(pan<0?1+.5*pan:1)}
+    pa[j]=pan;gl[j]=Math.cos((pan+1)*Math.PI/4)*sg;gr[j]=Math.sin((pan+1)*Math.PI/4)*sg}
+  for(let j=1;j<M;j++)spd[j]=Math.hypot(px[j]-px[j-1],py[j]-py[j-1])*CR/SS;
+  const ka=1-Math.exp(-1/(CR*.008));for(let j=1;j<M;j++)spd[j]=spd[j-1]+(spd[j]-spd[j-1])*ka;for(let j=M-2;j>=0;j--)spd[j]=spd[j+1]+(spd[j]-spd[j+1])*ka;
+  const cs=[];for(let j=0;j<M;j++)if(con[j])cs.push(spd[j]);cs.sort((a,b)=>a-b);const norm=cs.length?Math.max(30,cs[Math.floor(cs.length*.85)]):100;
   /* human gestures: a hand colours in sweeps. Each sweep swells and fades (the pen slows to turn round),
      has its own pressure and pitch, pushes scratch more than pulls, sometimes the tip lifts for a moment,
      long sweeps are broken by re-grips, and the felt squeaks only now and then in short chirps. */
@@ -64,29 +75,31 @@ export async function genAudio(p,onProg){
          return (Math.sin(ph)*.7+Math.sin(2*ph)*.22+Math.sin(3*ph)*.08)*w*am*(.65+.7*lpn)},SND.strokes)}})
    let sm=0,sn=0;for(let j=0;j<M;j++)if(con[j]){sm+=gEnv[j];sn++}const nrm=sn?Math.min(1.6,.92*sn/Math.max(1e-3,sm)):1;for(let j=0;j<M;j++)gEnv[j]*=nrm}
   // continuous stroke layer
-  let env=0,dist=0,lastLid=-2,det=1,detT=1,gn=1,gT=1,ss=0,sc=0;
+  let env=0,dist=0,lastLid=-2,det=1,detT=1,gn=1,gT=1,yl=0,yr=0;
   for(let i=0;i<N;i++){
     const tc=i*CR/SR;let j=tc|0;if(j>M-2)j=M-2;const fr=tc-j;
     const c=con[j],gE=gEnv[j]+(gEnv[j+1]-gEnv[j])*fr,sp=Math.min(1.8,(spd[j]+(spd[j+1]-spd[j])*fr)/norm*gSp[j]);
     const rc=getRC(tl[j]);env+=(c-env)*(c>env?rc.kA:rc.kR);
     if(gId[j]!==lastLid){lastLid=gId[j];gT=gGain[j]}detT=gDet[j]*gTone[j];
     det+=(detT-det)*.004;gn+=(gT-gn)*.003;dist+=sp*norm/SR;
-    if(env>1e-4){const P=rc.P;CUR.body=P.body;CUR.grain=P.grain;CUR.reso=P.reso;const k0=gn*gE,x=rc.R.proc(rc.st,env,sp,dist,det*P.tone,i,i/SR)*k0*P.vol*SND.strokes,xr=CUR.ref*k0;SL[i]=x*gl[j];SRt[i]=x*gr[j];if(env>.3){const lw=1/(rc.R.loud||1);ss+=xr*xr*lw*lw;sc++}}
-    if((i&65535)===0&&onProg){onProg(i/N*.7);await sleep(0)}
+    if(env>1e-4){const P=rc.P;CUR.body=P.body;CUR.grain=P.grain;CUR.reso=P.reso;const k0=gn*gE,x=rc.R.proc(rc.st,env,sp,dist,det*P.tone,i,i/SR)*k0*P.vol*SND.strokes*tg,xr=CUR.ref*k0;if(SP){yl+=(x*gl[j]-yl)*kL[j];yr+=(x*gr[j]-yr)*kR[j];SL[i]+=yl;SRt[i]+=yr}else{SL[i]+=x*gl[j];SRt[i]+=x*gr[j]}if(env>.3){const lw=1/(rc.R.loud||1);ss+=xr*xr*lw*lw;sc++}}
+    if((i&65535)===0&&onProg){onProg((trk+i/N)/NT*.7);await sleep(0)}
   }
   // pen touch-downs
   {let off=99;for(let j=1;j<M;j++){if(!con[j]){off++;continue}const T0=getRC(tl[j]).R.tap;if(T0.amt>0&&!con[j-1]&&off>40){const a=T0.amt*(.6+rnd()*.4)*clamp(off/400,.28,1)*getRC(tl[j]).P.taps,f=T0.f*(.9+rnd()*.2),lp=new BQ('lp',3500,.7);
       put(j/CR,.06,pa[j],k=>{const q=k/SR;return (Math.sin(2*Math.PI*f*q)*Math.exp(-q/T0.dec)+lp.p(nz())*Math.exp(-q/.0015)*T0.click*.6)*a},SND.strokes)}off=0}}
+  }
   // cap / click / water events at colour changes
   const o=p.order.filter(r=>!r.instant),ev=[];
   if(o.length){const panOf=x=>clamp((x/seg.W-.5)*1.1,-.55,.55);
-    ev.push({t:Math.max(.05,p.vOf(o[0].t0)-.38-rnd()*.1),type:'open',pan:panOf(o[0].legs[0].p0[0]),tool:o[0].tool});
+    ev.push({t:Math.max(.05,p.vOf(o[0].t0)-.38-rnd()*.1),type:'open',pan:panOf(o[0].legs[0].p0[0]),x:o[0].legs[0].p0[0],y:o[0].legs[0].p0[1],tool:o[0].tool});
     for(let k=1;k<o.length;k++){const a=o[k-1],b=o[k];if(a.color===b.color&&a.tool===b.tool)continue;const tc=p.vOf(a.t1)+.03+rnd()*.04,to=Math.max(tc+.09,p.vOf(b.t0)-.12-rnd()*.05);
-      ev.push({t:tc,type:'close',pan:panOf(a.legs[a.legs.length-1].p1[0]),tool:a.tool});ev.push({t:to,type:'open',pan:panOf(b.legs[0].p0[0]),tool:b.tool})}
-    const L=o[o.length-1];ev.push({t:p.vOf(L.t1)+.12,type:'close',pan:panOf(L.legs[L.legs.length-1].p1[0]),tool:L.tool})}
-  o.forEach(r=>{if(!TOOLS[r.tool].glue)return;const s0=r.t0+r.dur*r.sf,sd=r.dur*(1-r.sf),pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);const a=p.vOf(s0+sd*(GL.p0+.02)),b=p.vOf(s0+sd*(GL.p1+.04));ev.push({t:a,d:Math.max(.1,b-a),type:'pour',pan:pn,tool:r.tool});ev.push({t:p.vOf(s0+sd*(GL.t0+.01)),type:'tap',pan:pn,tool:r.tool})});
-  if(FLQ.drops)o.forEach(r=>{if(!TOOLS[r.tool].fluid)return;const pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);ev.push({t:p.vOf(r.t0),type:'drip',pan:pn,tool:r.tool})});
-  ev.forEach(e=>{const k=getRC(e.tool||S.tool).P.events;toolEvent((t,d,pn,gen,g)=>put(t,d,pn,gen,(g==null?SND.events:g)*k),e,rnd)});
+      ev.push({t:tc,type:'close',pan:panOf(a.legs[a.legs.length-1].p1[0]),x:a.legs[a.legs.length-1].p1[0],y:a.legs[a.legs.length-1].p1[1],tool:a.tool});ev.push({t:to,type:'open',pan:panOf(b.legs[0].p0[0]),x:b.legs[0].p0[0],y:b.legs[0].p0[1],tool:b.tool})}
+    const L=o[o.length-1];ev.push({t:p.vOf(L.t1)+.12,type:'close',pan:panOf(L.legs[L.legs.length-1].p1[0]),x:L.legs[L.legs.length-1].p1[0],y:L.legs[L.legs.length-1].p1[1],tool:L.tool})}
+  o.forEach(r=>{if(!TOOLS[r.tool].glue)return;const s0=r.t0+r.dur*r.sf,sd=r.dur*(1-r.sf),pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);const a=p.vOf(s0+sd*(GL.p0+.02)),b=p.vOf(s0+sd*(GL.p1+.04));ev.push({t:a,d:Math.max(.1,b-a),type:'pour',pan:pn,x:r.cx,y:r.cy,tool:r.tool});ev.push({t:p.vOf(s0+sd*(GL.t0+.01)),type:'tap',pan:pn,x:r.cx,y:r.cy,tool:r.tool})});
+  if(FLQ.drops)o.forEach(r=>{if(!TOOLS[r.tool].fluid)return;const pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);ev.push({t:p.vOf(r.t0),type:'drip',pan:pn,x:r.cx,y:r.cy,tool:r.tool})});
+  await prepareAddons();runHook('sound',{put,putS,p});
+  ev.forEach(e=>{const k=getRC(e.tool||S.tool).P.events;toolEvent((t,d,pn,gen,g)=>putS&&e.x!=null?putS(t,d,e.x,e.y,gen,(g==null?SND.events:g)*k):put(t,d,pn,gen,(g==null?SND.events:g)*k),e,rnd)});
   if(onProg){onProg(.78);await sleep(0)}
   // reverb on the dry mix
   const mid=new Float32Array(N);for(let n=0;n<N;n++)mid[n]=(SL[n]+SRt[n]+EL[n]+ER[n])*.5;

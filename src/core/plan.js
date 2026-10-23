@@ -1,5 +1,6 @@
+import {addonHasFocus,painters} from '../addons/registry.js';
 import {FLQ,FLY,HP,OUT,S,SHADE,TOOLS,VS,VS_DIRS,view,zoneH,zoneTool} from './settings.js';
-import {buildPath} from './strokes.js';
+import {STROKE,buildPath} from './strokes.js';
 import {SS,TAU,clamp,ease3,hex2hsl,hsl2hex,lerp,rngOf} from './utils.js';
 import {art,customOrder,orderedZones,pageArea,seg,syncLk,zClose,zCut,zFast,zZoom,zoneByI,zoneTone,zones} from './zones.js';
 import {clampCenter} from '../render/camera.js';
@@ -74,7 +75,7 @@ export function vsRegions(z){const r=z.r,key=[VS.dir,VS.w,VS.style,r.x0,r.y0,r.x
   else regs=[mk2(tOut,1,{vsStyle:'form'})];
   regs=regs.filter(Boolean);z.vsKey=key;z.vsRegs=regs;return regs}
 export function makePlan(){
-  planVer++;
+  planVer++;{const pn=painters();STROKE.reach=pn.reach||0;STROKE.walkK=pn.pace&&pn.walk?pn.pace/pn.walk:0}
   const H=HP(),human=H.on;
   let list=orderedZones().filter(z=>!z.skip);
   if(human&&!customOrder){const rnd=rngOf(77+S.seed);for(let i=1;i<list.length-1;i++)if(!list[i].r.isBg&&!list[i+1].r.isBg&&rnd()<H.shuffle*.3){const t=list[i];list[i]=list[i+1];list[i+1]=t;i++}}
@@ -82,13 +83,19 @@ export function makePlan(){
   const regsL=[],late=[];
   list.forEach(z=>{syncLk(z);regsL.push(z.r);const ly=SHADE.on&&!z.flat&&z.r.layers;if(ly){if(SHADE.when==='end')late.push(...ly);else regsL.push(...ly)}});
   const vsL=[];list.forEach(z=>{if(vsWanted(z))vsL.push(...vsRegions(z))});
-  const order=regsL.concat(late,vsL).map((r,k)=>{const z=zoneByI.get(r.i);r.color=r.shadowOf?vsColor(z.color,r.vsK):r.layerOf?zoneTone(z,r.tidx):z.color;r.fast=zFast(z);r.instant=zCut(z);r.close=zClose(z);r.zoomV=zZoom(z);r.tool=r.shadowOf?'marker':zoneTool(z);const Hz=zoneH(z);r.Hs=Hz.sloppy;r.sf=TOOLS[r.tool].glue?.72:1;r.gs=0;buildPath(r,Hz,S.seed);r.k=k;return r});
+  const PN=painters(),par=PN.n>1&&PN.mode==='parallel',PACE=PN.pace||0,WALK=PN.walk||1;
+  let order=regsL.concat(late,vsL).map((r,k)=>{const z=zoneByI.get(r.i);r.color=r.shadowOf?vsColor(z.color,r.vsK):r.layerOf?zoneTone(z,r.tidx):z.color;r.fast=zFast(z);r.instant=zCut(z);r.close=zClose(z);r.zoomV=zZoom(z);r.tool=r.shadowOf?'marker':zoneTool(z);const Hz=zoneH(z);r.Hs=Hz.sloppy;r.sf=TOOLS[r.tool].glue?.72:1;r.gs=0;buildPath(r,Hz,S.seed);r.k=k;return r});
   if(!order.length)return {order,shots:[{ts:0,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:1.4,zrate:1,trans:'cut',intro:true}],total:2,endC:1.7,cTotal:2,vTab:null,sparkles:[],cOf:v=>v,vOf:c=>c,revealC:1.7,fly:[]};
   const intro=1.7,REVEAL=3.8,fly=FLY.mode!=='off'?flySegs():[],flyT=fly.length*FLY.dur;
-  const outro=!fly.length?4.8:FLY.mode==='after'?REVEAL+flyT+.2:.5+flyT+REVEAL;
-  order.forEach((r,k)=>{r.raw=(.12+.55*Math.pow(r.pathW/(1000*SS),.72))*(TOOLS[r.tool].fluid?1.8:1);if(TOOLS[r.tool].glue){const spr=2+3.4*Math.sqrt(r.area/pageArea());r.sf=r.raw/(r.raw+spr);r.raw+=spr}else r.sf=1;r.raw*=clamp((zoneByI.get(r.i)||{}).tmul||1,.15,8);
+  // a character's camera gets a few seconds for the finale scene before the reveal
+  const fin=S.camMode==='cat'&&addonHasFocus()?7:0,outro=fin+(!fly.length?4.8:FLY.mode==='after'?REVEAL+flyT+.2:.5+flyT+REVEAL);
+  // free painters help with big zones: those are cut into pieces (runs of whole reach patches) that anyone can take
+  if(par&&PN.help&&STROKE.reach>0){order=splitForHelp(order,PN.n,PACE?PACE*8:0);order.forEach((r,k)=>r.k=k)}
+  // walking from one zone to the next: a quick hand move, or a painter's walk at its own speed
+  const trvOf=(e,s)=>{if(!e)return .25;const d=Math.hypot(e[0]-s[0],e[1]-s[1]);return(PACE?clamp(.25+d/(WALK*Math.min(1.47,1+d/(4*WALK/.95))),.25,8):clamp(.12+d/(5200*SS/2),.12,.5))+(human?.04+rnd()*.18*(.4+H.pauses*1.5):0)};
+  order.forEach((r,k)=>{r.raw=(PACE?r.pathW/PACE:.12+.55*Math.pow(r.pathW/(1000*SS),.72))*(TOOLS[r.tool].fluid?1.8:1);if(TOOLS[r.tool].glue){const spr=2+3.4*Math.sqrt(r.area/pageArea());r.sf=r.raw/(r.raw+spr);r.raw+=spr}else r.sf=1;r.raw*=clamp((zoneByI.get(r.i)||{}).tmul||1,.15,8);
     r.turnTo=undefined;
-    if(k>0){const p=order[k-1],e=p.legs[p.legs.length-1].p1,s=r.legs[0].p0;r.trRaw=clamp(.12+Math.hypot(e[0]-s[0],e[1]-s[1])/(5200*SS/2),.12,.5)+(human?.04+rnd()*.18*(.4+H.pauses*1.5):0)}else r.trRaw=0;
+    if(k>0){const p=order[k-1];r.trRaw=trvOf(p.legs[p.legs.length-1].p1,r.legs[0].p0)}else r.trRaw=0;
     // montage cut: the zone takes no screen time, it is simply finished when the next shot starts
     if(r.instant){r.raw=0;r.trRaw=0}});
   if(human&&H.turn>0){let ang=0,cool=0;const nat=-.62;
@@ -97,21 +104,33 @@ export function makePlan(){
       if(Math.abs(ang)>.15&&rnd()<.4)t=0;if(Math.abs(t-ang)<.08)return;
       r.turnTo=t;ang=t;r.trRaw+=.55+.35*Math.abs(t);cool=2})}
   const k_=r=>r.fast&&!TOOLS[r.tool].fluid&&!TOOLS[r.tool].glue?S.fastMul:1;
-  let f=(S.duration-intro-outro)/Math.max(1e-3,order.reduce((a,r)=>a+(r.raw+r.trRaw)/k_(r),0));
-  let built=null;
-  for(let it=0;it<3;it++){
-    let t=intro;order.forEach(r=>{r.travel=r.trRaw*f;t+=r.travel;r.t0=t;r.dur=r.instant?.001:Math.max(.12,r.raw*f);t+=r.dur;r.t1=t});
-    const endC=t,cTotal=endC+outro;
-    built=warp(order,cTotal,endC);
-    const V=built.total;f*=(S.duration-intro-outro)/Math.max(.5,V-intro-outro);
-    if(Math.abs(V-S.duration)<.05)break;
+  let built=null,tracks=null,endC;
+  if(par){
+    // several painters at once: every track runs its own zones back to back, all tracks start together;
+    // "fast" zones are simply shorter (a global time warp would speed up the other painters too)
+    order.forEach(r=>r.turnTo=undefined);tracks=shareOut(order,PN.n,trvOf,PACE?restDue:null,PN.reach?PN.reach/.33*1.3:0);
+    const load=tracks.map(T=>T.reduce((a,r)=>a+r.rawP+r.trRaw,0)),f=PACE?1:(S.duration-intro-outro)/Math.max(1e-3,...load);
+    tracks.forEach(T=>{let t=intro;T.forEach(r=>{r.travel=r.trRaw*f;t+=r.travel;r.t0=t;r.dur=r.instant?.001:Math.max(.12,r.rawP*f);t+=r.dur;r.t1=t})});
+    order.sort((a,b)=>a.t0-b.t0);order.forEach((r,k)=>{r.k=k;r.fast=false});
+    endC=Math.max(...order.map(r=>r.t1));built=warp(order,endC+outro,endC);
+  }else{
+    // characters rest now and then (r.rest seconds before a zone: they stand, yawn and stretch, the tool resting)
+    order.forEach(r=>r.rest=0);if(PACE){let w=0,due=restDue(order[0]);order.forEach((r,k)=>{if(k>0&&!r.instant&&w>=due){r.rest=REST;r.trRaw+=REST;w=0;due=restDue(r)}w+=r.raw})}
+    let f=PACE?1:(S.duration-intro-outro)/Math.max(1e-3,order.reduce((a,r)=>a+(r.raw+r.trRaw)/k_(r),0));
+    for(let it=0;it<3;it++){
+      let t=intro;order.forEach(r=>{r.trk=0;r.travel=r.trRaw*f;t+=r.travel;r.t0=t;r.dur=r.instant?.001:Math.max(.12,r.raw*f);t+=r.dur;r.t1=t});
+      const cTotal=t+outro;endC=t;
+      built=warp(order,cTotal,endC);if(PACE)break;
+      const V=built.total;f*=(S.duration-intro-outro)/Math.max(.5,V-intro-outro);
+      if(Math.abs(V-S.duration)<.05)break;
+    }
   }
-  const p={order,intro,endC:order[order.length-1].t1,cTotal:built.cTotal,total:built.total,vTab:built.vTab,dc:built.dc};
-  {let a=0;p.turns=[];order.forEach(r=>{if(r.turnTo===undefined)return;p.turns.push({c0:r.t0-r.travel*.92,c1:r.t0-r.travel*.12,a0:a,a1:r.turnTo});a=r.turnTo});
+  const p={order,tracks:tracks||[order],intro,endC,cTotal:built.cTotal,total:built.total,vTab:built.vTab,dc:built.dc};
+  {let a=0;p.turns=[];if(!par)order.forEach(r=>{if(r.turnTo===undefined)return;p.turns.push({c0:r.t0-r.travel*.92,c1:r.t0-r.travel*.12,a0:a,a1:r.turnTo});a=r.turnTo});
    if(a!==0){const e=order[order.length-1].t1;p.turns.push({c0:e+.3,c1:e+1.4,a0:a,a1:0})}}
   p.vOf=c=>{const x=clamp(c/p.dc,0,p.vTab.length-1);const i=Math.floor(x),fr=x-i;return i+1<p.vTab.length?lerp(p.vTab[i],p.vTab[i+1],fr):p.vTab[i]};
   p.cOf=v=>{const T=p.vTab;if(v<=0)return 0;if(v>=T[T.length-1])return (T.length-1)*p.dc;let lo=0,hi=T.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(T[m]<=v)lo=m;else hi=m}return (lo+(v-T[lo])/(T[hi]-T[lo]||1))*p.dc};
-  p.fly=fly;p.shots=buildShots(order,rnd,fly,REVEAL);p.revealC=p.shots.revealC;
+  p.fly=fly;p.shots=buildShots(par?tracks[0]:order,rnd,fly,REVEAL,endC+fin);p.revealC=p.shots.revealC;
   p.hasThick=order.some(r=>TOOLS[r.tool].thick);
   const sp=order.filter(r=>!r.isBg).sort((a,b)=>b.area-a.area).slice(0,14);
   p.sparkles=sp.map((r,i)=>({x:r.cx,y:r.cy,d:i*.11,s:.6+rnd()*.6}));
@@ -128,7 +147,42 @@ export function warp(order,cTotal,endC){
 }
 export function paperRot(c){const T=plan&&plan.turns;if(!T||!T.length)return 0;let a=0;for(const k of T){if(c<k.c0)break;a=c>=k.c1?k.a1:lerp(k.a0,k.a1,ease3((c-k.c0)/(k.c1-k.c0)))}return a}
 export function viewFit(){return Math.min(view.W/(seg.W*1.1),view.H/(seg.H*1.1))}
-export function buildShots(order,rnd,fly,REVEAL){
+/* zones shared out between painters: each zone (with its shade layers) goes to the track that is free soonest,
+   counting the walk from where that painter stopped */
+/* several painters: the next piece of work goes to whoever gets to it first (a painter who just did a piece of the
+   same zone is preferred a little, so a zone is not torn apart without need) */
+/* a character's rest comes after 25..45 s of work (a hash of the zone, so it is the same on every build) */
+const REST=2.6,restDue=r=>{const v=Math.sin((r&&r.i||1)*12.9898+7.1)*43758.5453;return 25+20*(v-Math.floor(v))};
+function shareOut(order,n,trv,rd,sep){
+  const tr=Array.from({length:n},()=>[]),free=new Float64Array(n),endP=new Array(n).fill(null),lastI=new Array(n).fill(-1),worked=new Float64Array(n),due=Array.from({length:n},(_,k)=>rd?rd({i:k+3}):Infinity);
+  order.forEach((r,j)=>{const fk=r.fast&&!TOOLS[r.tool].fluid&&!TOOLS[r.tool].glue?S.fastMul:1;r.rawP=r.raw/fk;r.k0=j});
+  // characters (sep = elbow room): of the next three pieces of work it takes the first one where its tool would not
+  // come near another painter's (checked at the start, middle and end); if all three would, it simply takes the next one
+  const start=new Map(),tipAt=(r,S0,t)=>{const p=clamp((t-S0)/Math.max(1e-3,r.rawP),0,1),L=r.legs;let lo=0,hi=L.length-1;while(lo<hi){const m=(lo+hi)>>1;if(p<L[m].f1)hi=m;else lo=m+1}return L[lo].p1};
+  const clash=(r,k,S0)=>{if(r.instant)return false;for(let j=0;j<n;j++){if(j===k)continue;for(let q=tr[j].length-1;q>=0;q--){const o=tr[j][q],a=start.get(o),b=a+o.rawP;if(b<S0)break;if(a>S0+r.rawP||o.instant)continue;
+      for(const z of [0,.5,1]){const t=S0+r.rawP*z;if(t<a||t>b)continue;const p1=tipAt(r,S0,t),p2=tipAt(o,a,t);if(Math.hypot(p1[0]-p2[0],p1[1]-p2[1])<sep)return true}}}return false};
+  const pend=order.slice();
+  while(pend.length){
+    // whoever is free first (when two are, the one that has just worked on that zone carries on)
+    let k=0,best=1e18;for(let q=0;q<n;q++){const t=pend[0].instant?0:trv(endP[q],pend[0].legs[0].p0),c=free[q]+t-(lastI[q]===pend[0].i?.4:0);if(c<best-1e-9){best=c;k=q}}
+    let pick=0;if(sep)for(let q=0;q<Math.min(3,pend.length);q++){if(!clash(pend[q],k,free[k]+(pend[q].instant?0:trv(endP[k],pend[q].legs[0].p0)))){pick=q;break}}
+    const r=pend.splice(pick,1)[0];let bt=r.instant?0:trv(endP[k],r.legs[0].p0);
+    r.wait=0;r.rest=0;if(rd&&!r.instant&&tr[k].length&&worked[k]>=due[k]){r.rest=REST;bt+=REST;worked[k]=0;due[k]=rd(r)}worked[k]+=r.rawP;
+    r.trk=k;r.trRaw=bt;start.set(r,free[k]+bt);free[k]+=bt+r.rawP;endP[k]=r.legs[r.legs.length-1].p1;lastI[k]=r.i;tr[k].push(r)}
+  return tr}
+/* cuts big zones into up to n pieces (each at least minW of path, i.e. a few seconds of work) along their reach patches (legs that share a stand point stay together) */
+function splitForHelp(order,n,minW){const out=[];
+  order.forEach(r=>{const T=TOOLS[r.tool];
+    if(r.instant||r.shadowOf||r.layerOf||T.fluid||T.glue||!r.legs.length||(minW>0&&r.pathW<minW*2.5)){out.push(r);return}
+    const runs=[];let cur=null;r.legs.forEach(l=>{if(!cur||l.st!==cur.st){cur={st:l.st,legs:[],w:0};runs.push(cur)}cur.legs.push(l);cur.w+=l.wt});
+    const m=Math.min(n,Math.floor(runs.length/3),minW>0?Math.floor(r.pathW/minW):n);if(m<2){out.push(r);return}
+    const pieces=[];let piece=[],acc=0;runs.forEach(q=>{piece.push(...q.legs);acc+=q.w;if(pieces.length<m-1&&acc>=r.pathW*(pieces.length+1)/m){pieces.push(piece);piece=[]}});
+    if(piece.length)pieces.push(piece);
+    pieces.forEach((L,j)=>{const w=L.reduce((a,l)=>a+l.wt,0)||1;let a=0;
+      const legs=L.map(l=>{const c=Object.assign({},l);c.f0=a/w;a+=l.wt;c.f1=a/w;return c});
+      out.push(Object.assign({},r,{legs,pathW:w,part:j,parts:pieces.length,cv:null,cvx:null,done:0}))})});
+  return out}
+export function buildShots(order,rnd,fly,REVEAL,Eend){
   const shots=[{ts:0,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:1.4,zrate:1,trans:'cut',intro:true}];
   const radius=z=>Math.min(view.W,view.H)/(viewFit()*z)/2;
   let cur=null,cutAt=null;
@@ -152,7 +206,7 @@ export function buildShots(order,rnd,fly,REVEAL){
   });
   shots.slice(1).forEach(s=>{let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;s.regs.forEach(r=>{x0=Math.min(x0,r.x0);y0=Math.min(y0,r.y0);x1=Math.max(x1,r.x1);y1=Math.max(y1,r.y1)});s.cx=(x0+x1)/2;s.cy=(y0+y1)/2;const f=s.regs[0];s.ts=s.cutTs!=null?s.cutTs:s.trans==='glide'?f.t0-f.travel:s.liq?f.t0-Math.min(.34,f.travel*.8):f.t0;if(s.key==='wide'){s.cx=seg.W/2;s.cy=seg.H/2}});
   const last=order[order.length-1];
-  const E=last.t1,D=FLY.dur,mkFly=(f,ts)=>Object.assign({fly:true,ts,dur:D,trans:'cut',follow:0,rate:1,zrate:1,leak:rnd()<.5,leakPos:[rnd()<.5?-.05:1.05,rnd()],leakHue:rnd()},f);
+  const E=Eend!=null?Eend:last.t1,D=FLY.dur,mkFly=(f,ts)=>Object.assign({fly:true,ts,dur:D,trans:'cut',follow:0,rate:1,zrate:1,leak:rnd()<.5,leakPos:[rnd()<.5?-.05:1.05,rnd()],leakHue:rnd()},f);
   if(fly.length&&FLY.mode==='before'){fly.forEach((f,k)=>shots.push(mkFly(f,E+.5+k*D)));const rv=E+.5+fly.length*D;
     shots.push({ts:rv,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:.85,zrate:.62,trans:'glide',outro:true});shots.revealC=rv}
   else{shots.push({ts:E,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:1.2,zrate:1.2,trans:'glide',outro:true});shots.revealC=E;

@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import {runHook} from '../addons/registry.js';
 import {plan,viewFit} from '../core/plan.js';
 import {drawMask} from '../core/segment.js';
 import {OVS,SHADE,view} from '../core/settings.js';
@@ -60,7 +61,7 @@ export function renderEditor(t){
   if(ed.dirtyPaint){paintPreview();drawBrush()}if(ed.dirtySel)paintSel();
   wetSlots.forEach(s=>s.active=false);setWetUniforms();paperShader.uniforms.uWetStr=0;
   paperShader.uniforms.uSelOn=1;paperShader.uniforms.uFlat=1;if(jarC)jarC.visible=false;hideGrains();paperShader.uniforms.uTime=t;paperShader.uniforms.uCamPhase=t*.8;paperShader.uniforms.uShine=-1;
-  penC.visible=penShadow.visible=false;(plan&&plan.sparkles||[]).forEach(s=>s.g&&s.g.scale.set(0));
+  penC.visible=penShadow.visible=false;runHook('hide');(plan&&plan.sparkles||[]).forEach(s=>s.g&&s.g.scale.set(0));
   const fit=viewFit()*ed.z;world.scale.set(fit);world.pivot.set(ed.x,ed.y);world.position.set(view.W*OVS/2,view.H*OVS/2);world.rotation=0;if(postShader){const u=postShader.uniforms;u.uPersp=[0,0,0];u.uDof=0;u.uBreath=1;u.uGrain=0;u.uDust=0;u.uTilt=0;u.uVel=[0,0];u.uBlurG=0;u.uLeak=0;u.uCA=0;u.uBloom=0;u.uVig=0}if(paperC)paperC.rotation=0;setPR(0);
   const U2=postShader.uniforms;U2.uTilt=0;U2.uBlurG=0;U2.uVel=[0,0];U2.uCA=0;U2.uVig=0;U2.uBloom=0;U2.uLeak=0;
   draw();

@@ -115,7 +115,7 @@ export function updateDesk(){
 export function applyFormat(f,k){
   k=k||previewScale();setOVS(fxOff()?1.04:1.45);if(postShader)postShader.uniforms.uOvs=OVS;view.fmt=f;[view.W,view.H]=FORMATS[f].map(v=>Math.round(v*k/2)*2);view.k=k;
   app.renderer.resize(view.W,view.H);
-  if(sceneRT)sceneRT.destroy(true);sceneRT=PIXI.RenderTexture.create({width:Math.round(view.W*OVS),height:Math.round(view.H*OVS)});
+  if(sceneRT)sceneRT.destroy(true);sceneRT=PIXI.RenderTexture.create({width:Math.round(view.W*OVS),height:Math.round(view.H*OVS),multisample:fxOff()?PIXI.MSAA_QUALITY.NONE:PIXI.MSAA_QUALITY.MEDIUM});
   post.removeChildren();postMesh=new PIXI.Mesh(quad(0,0,view.W,view.H),postShader);post.addChild(postMesh);
   postShader.uniforms.uScene=sceneRT;postShader.uniforms.uRes=[view.W,view.H];
   updateDesk();

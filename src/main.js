@@ -1,9 +1,10 @@
 import * as PIXI from 'pixi.js';
+import {camCheck,catMotion,catStats,catWalks,tipJerk,underFeet} from './addons/cats.js';
 import {SND,ensureAudio,startAudio,stopAudio,wavB64} from './audio/audio.js';
 import {bumpPlanVer,plan,planDirty,viewFit} from './core/plan.js';
 import {extractLines,loadArtFromImage} from './core/segment.js';
 import {DESK,DUO,FLQ,GLT,IMP,OUT,PREV,PUFF,S,SHADE,TOOLS,U,VS,isMobileUI,view} from './core/settings.js';
-import {$,SS,clamp,mk} from './core/utils.js';
+import {$,SS,clamp,durLabel,mk} from './core/utils.js';
 import {DEFAULT_PALETTES,applyPalette,applySrcColors,art,composeColored,palSeed,seg,setPalette,zoneByI,zones} from './core/zones.js';
 import {buildDemo} from './data/demoArt.js';
 import {bindEditor,ed,renderEditor} from './editor/editor.js';
@@ -14,6 +15,7 @@ import {resetPaint} from './render/paint.js';
 import {renderAt} from './render/renderer.js';
 import {app,applyFormat,applyToolUniforms,initPixi,makeProceduralPattern,paperShader,seamlessFromImage,setPattern,setPatternSrc,updateDesk} from './render/scene.js';
 import {CYL_CACHE,buildTool,cylTex,shadowHover} from './render/toolSprites.js';
+import {renderAddonsUI} from './ui/addons.js';
 import {bindFly,buildFxUI,buildHumUI,buildToolUI,compactUI} from './ui/controls.js';
 import {REN,exportVideo,saveBlob,saveFrame,saveVideo} from './ui/exporter.js';
 import {bindInspector,renderPal,setSegValue,setSegValue2,updateInspector,zonesChanged} from './ui/inspector.js';
@@ -23,6 +25,7 @@ import {LS_KEY,applyProject,loadImg,lsArm,lsClearAll,lsInit,lsOn,lsRead,lsSave,l
 import {bindFullscreen} from './ui/stage.js';
 import {bindWizard,openFile,syncWizard} from './ui/wizard.js';
 import './styles/app.css';
+import './addons/cats.js';
 import './styles/studio.css';
 export function boot(){
   // phones start with the light preview (half size, no camera effects); the choice is remembered
@@ -34,9 +37,10 @@ export function boot(){
   $('modeSeg').onclick=e=>{const b=e.target.closest('button');if(b)setMode(b.dataset.m)};
   $('viewSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;ed.view=b.dataset.v;setSegValue2('viewSeg',ed.view);ed.dirtyPaint=true};
   $('formats').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;[...$('formats').children].forEach(x=>x.setAttribute('aria-pressed',x===b));applyFormat(b.dataset.f);rebuild(true)};
-  $('dur').oninput=e=>{$('durV').textContent=e.target.value+' с'};$('dur').onchange=e=>{S.duration=+e.target.value;rebuild(false)};
+  $('dur').oninput=e=>{$('durV').textContent=durLabel(e.target.value)};$('dur').onchange=e=>{S.duration=+e.target.value;rebuild(false)};
   $('fastMul').oninput=e=>{$('fastMulV').textContent='×'+(+e.target.value).toFixed(1)};$('fastMul').onchange=e=>{S.fastMul=+e.target.value;rebuild(false)};
   $('montage').onchange=e=>{S.montage=e.target.checked;rebuild(true)};
+  $('wideBig').onchange=e=>{S.wideBig=e.target.checked;rebuild(true)};
   $('styleSeg').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;S.human=b.dataset.s==='human';setSegValue2('styleSeg',b.dataset.s);
     [...$('styleSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b));$('humBox').setAttribute('aria-disabled',String(!S.human));
     $('styleHint').textContent=S.human?'Рука обводить контур, штрихує нерівно, змінює натиск, робить паузи, а наприкінці повертається й домальовує пропуски.':'Рівні паралельні проходи з однаковим натиском, без виходу за контур.';rebuild(false)};
@@ -107,10 +111,11 @@ export function boot(){
   $('vsDark').oninput=e=>{$('vsDarkV').textContent=(+e.target.value).toFixed(2)};$('vsDark').onchange=e=>{VS.dark=+e.target.value;zonesChanged(true)};
   $('render').onclick=exportVideo;$('rhCancel').onclick=()=>{REN.cancel=true;$('rhInfo').textContent='Скасовую…'};$('cancelRender').onclick=()=>{REN.cancel=true;$('renderInfo').textContent='Скасовую…'};$('save').onclick=saveVideo;
   document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();togglePlay()}});
-  window.__studio={stepRun:(a,b,fps)=>{seek(a);for(let v=a+1/fps;v<=b;v+=1/fps){camStep(v,1/fps);renderAt(v);setT(v)}return {vis:grainPool.filter(s=>s.visible).length}},grainStats:()=>({vis:grainPool.filter(s=>s.visible).length,sh:grainShPool.filter(s=>s.visible).length}),focusTrace:(a,b)=>{seek(a);const out=[];for(let v=a;v<b;v+=1/60){camStep(v,1/60);const st=penState(plan.cOf(v)),fit=viewFit()*cam.z;out.push([+cam.fy.toFixed(3),+clamp((st.y-cam.y)*fit/view.H+.5,.1,.9).toFixed(3)])}return out},shots:()=>plan.shots.map(s=>({ts:+plan.vOf(s.ts).toFixed(2),key:s.key,z:+(s.z||0).toFixed(2),liq:!!s.liq,trans:s.trans})),flDump:()=>{const r=plan.order.find(r=>r.fl&&r.i===68);if(!r)return null;const F=r.fl,dp=F.drops[0];const row=[],T=[];for(let x=dp.gx;x<Math.min(F.gw-1,dp.gx+60);x++){const k=dp.gy*F.gw+x;row.push(+F.d[k].toFixed(3));T.push(+(F.T[k]-dp.ta).toFixed(3))}return{row,T,cs:F.cs,gw:F.gw,t:F.t-dp.ta}},regTimes:()=>plan.order.map(r=>({i:r.i,a:plan.vOf(r.t0),b:plan.vOf(r.t0+r.dur),area:r.area})),fontReady:()=>{setOutroFont(true)},cyl:(n,f)=>{if(f)delete CYL_CACHE[n];return cylTex(n)},seek:v=>{if(ed.on)setMode('anim');seek(v)},renderFrame:(i,fps)=>{const v=i/fps;if(i===0){resetPaint();camInit()}else camStep(v,1/fps);renderAt(v);return app.view},
-    total:()=>plan.total,zoneSet:(ids,k,v)=>{ids.forEach(i=>{const z=zoneByI.get(i);if(z)z[k]=v});applyToolUniforms();zonesChanged(false)},glueTimes:()=>plan.order.filter(r=>TOOLS[r.tool].glue).map(r=>({a:plan.vOf(r.t0+r.dur*r.sf),b:plan.vOf(r.t1),area:r.area})).sort((x,y)=>y.area-x.area).slice(0,3),turns:()=>(plan.turns||[]).map(t=>({v:plan.vOf(t.c0),a:t.a1})),composeColored,audioWav:async()=>{SND.data=null;const A=await ensureAudio(true);return wavB64(A)},saveFrame,flyTimes:()=>plan.shots.filter(x=>x.fly).map(x=>plan.vOf(x.ts)),revealV:()=>plan.vOf(plan.revealC),setFormat:f=>{applyFormat(f);rebuild(true)},setMode,ed,zones:()=>zones,select:ids=>{ed.sel=new Set(ids);ed.dirtySel=true;updateInspector()},S,rebuild,renderEditor:()=>renderEditor(1),toolPreview:(t,col,h)=>{const B=buildTool(t),c=new PIXI.Container(),bg=new PIXI.Graphics();bg.beginFill(0xF7F3EC);bg.drawRect(-60,-260,1400,520);bg.endFill();c.addChild(bg);B.tint.forEach(g=>g.tint=col||0xE3416F);B.sh.position.set((4+38*(h||0))*SS,(6+52*(h||0))*SS);B.sh.rotation=.31;shadowHover(B.sh,h||0);c.addChild(B.sh);c.addChild(B.c);const cv=app.renderer.extract.canvas(c);c.destroy({children:true});return cv},
+  window.__studio={stepRun:(a,b,fps)=>{seek(a);for(let v=a+1/fps;v<=b;v+=1/fps){camStep(v,1/fps);renderAt(v);setT(v)}return {vis:grainPool.filter(s=>s.visible).length}},grainStats:()=>({vis:grainPool.filter(s=>s.visible).length,sh:grainShPool.filter(s=>s.visible).length}),camTrace:(a,b,n)=>{seek(a);const out=[];let k=0;for(let v=a;v<b;v+=1/60,k++){camStep(v,1/60);if(k%(n||10)===0)out.push([+v.toFixed(2),Math.round(cam.x),Math.round(cam.y),+cam.z.toFixed(2),cam.shot,cam.nib?1:0])}return out},focusTrace:(a,b)=>{seek(a);const out=[];for(let v=a;v<b;v+=1/60){camStep(v,1/60);const st=penState(plan.cOf(v)),fit=viewFit()*cam.z;out.push([+cam.fy.toFixed(3),+clamp((st.y-cam.y)*fit/view.H+.5,.1,.9).toFixed(3)])}return out},shots:()=>plan.shots.map(s=>({ts:+plan.vOf(s.ts).toFixed(2),key:s.key,z:+(s.z||0).toFixed(2),liq:!!s.liq,trans:s.trans})),flDump:()=>{const r=plan.order.find(r=>r.fl&&r.i===68);if(!r)return null;const F=r.fl,dp=F.drops[0];const row=[],T=[];for(let x=dp.gx;x<Math.min(F.gw-1,dp.gx+60);x++){const k=dp.gy*F.gw+x;row.push(+F.d[k].toFixed(3));T.push(+(F.T[k]-dp.ta).toFixed(3))}return{row,T,cs:F.cs,gw:F.gw,t:F.t-dp.ta}},regTimes:()=>plan.order.map(r=>({i:r.i,a:plan.vOf(r.t0),b:plan.vOf(r.t0+r.dur),area:r.area})),fontReady:()=>{setOutroFont(true)},cyl:(n,f)=>{if(f)delete CYL_CACHE[n];return cylTex(n)},seek:v=>{if(ed.on)setMode('anim');seek(v)},renderFrame:(i,fps)=>{const v=i/fps;if(i===0){resetPaint();camInit()}else camStep(v,1/fps);renderAt(v);return app.view},
+    total:()=>plan.total,zoneSet:(ids,k,v)=>{ids.forEach(i=>{const z=zoneByI.get(i);if(z)z[k]=v});applyToolUniforms();zonesChanged(false)},glueTimes:()=>plan.order.filter(r=>TOOLS[r.tool].glue).map(r=>({a:plan.vOf(r.t0+r.dur*r.sf),b:plan.vOf(r.t1),area:r.area})).sort((x,y)=>y.area-x.area).slice(0,3),turns:()=>(plan.turns||[]).map(t=>({v:plan.vOf(t.c0),a:t.a1})),composeColored,audioWav:async()=>{SND.data=null;const A=await ensureAudio(true);return wavB64(A)},saveFrame,flyTimes:()=>plan.shots.filter(x=>x.fly).map(x=>plan.vOf(x.ts)),revealV:()=>plan.vOf(plan.revealC),setFormat:f=>{applyFormat(f);rebuild(true)},setMode,ed,zones:()=>zones,select:ids=>{ed.sel=new Set(ids);ed.dirtySel=true;updateInspector()},S,rebuild,renderEditor:()=>renderEditor(1),catStats,catMotion,camCheck,catWalks,underFeet,tipJerk,toolPreview:(t,col,h)=>{const B=buildTool(t),c=new PIXI.Container(),bg=new PIXI.Graphics();bg.beginFill(0xF7F3EC);bg.drawRect(-60,-260,1400,520);bg.endFill();c.addChild(bg);B.tint.forEach(g=>g.tint=col||0xE3416F);B.sh.position.set((4+38*(h||0))*SS,(6+52*(h||0))*SS);B.sh.rotation=.31;shadowHover(B.sh,h||0);c.addChild(B.sh);c.addChild(B.c);const cv=app.renderer.extract.canvas(c);c.destroy({children:true});return cv},
     loadArtURL:url=>new Promise(res=>{const img=new Image();img.onload=()=>{const a=loadArtFromImage(img);a.srcURL=url;setArt(a,true);setTimeout(res,600)};img.src=url}),projectData,applyProject,lsSave:()=>{lsArm();lsSave()},lsRead};
   compactUI();
+  renderAddonsUI();
   bindWizard(()=>{applyFormat(view.fmt);if(ed.on)ed.dirtyPaint=true;else rebuild(true);syncWizard()});
   restoreLast(()=>setArt(buildDemo(),false));
   requestAnimationFrame(t=>{setLastNow(t);loop(t)});

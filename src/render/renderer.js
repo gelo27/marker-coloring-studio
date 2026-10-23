@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import {addonHasFocus,runHook} from '../addons/registry.js';
 import {paperRot,plan,viewFit} from '../core/plan.js';
 import {OVS,S,TOOLS,fxOff,view} from '../core/settings.js';
 import {SS,clamp,hex,lerp,smooth,smoothstep2} from '../core/utils.js';
@@ -33,6 +34,7 @@ export function renderAt(v){
   const pp=fxv('persp'),lean=.08+.42*pp;
   penC.rotation=ang-lean*.55;penC.scale.set((1+.05*h)*(1+.06*pp),(1+.05*h));
   penShadow.position.set(pw[0]+(4+38*h)*SS,pw[1]+(6+52*h)*SS);penShadow.rotation=ang+lean*.45;penShadow.scale.set((1+.03*h)*(1-.04*pp),1+.03*h);shadowHover(penShadow,h);
+  runHook('render',{v,c,st,pw,h});
   const fit=viewFit()*cam.z;
   const hx=(Math.sin(v*.7)*5+Math.sin(v*1.31+1)*2.5)*SS/cam.z*(S.human?.6+2*S.hum.shake:1),hy=(Math.cos(v*.57)*5+Math.sin(v*1.13+2)*2.5)*SS/cam.z*(S.human?.6+2*S.hum.shake:1);
   let tsx=0,tsy=0;if(st.jar!=null){const s=st.jar;jarC.visible=s<GL.t1;if(jarC.visible){const a=smooth(clamp(s/.08,0,1))*(1-smooth(clamp((s-GL.p1-.02)/(GL.t1-GL.p1-.02),0,1)));jarC.alpha=a;
@@ -45,7 +47,7 @@ export function renderAt(v){
   (plan.sparkles||[]).forEach(s=>{if(!s.g)return;const u=(ot-1.0-s.d)/.9;const k=u>0&&u<1?Math.sin(Math.PI*u):0;s.g.scale.set(k*s.s);s.g.rotation=u*.8});
   // post FX
   const U2=postShader.uniforms,since=v-cam.lastCut;
-  U2.uTilt=fxv('tilt')*smoothstep2(1.35,2.4,cam.z);
+  U2.uTilt=fxv('tilt')*smoothstep2(1.35,2.4,cam.z)*(S.camMode==='cat'&&addonHasFocus()?.45:1);
   U2.uFocusY=plan.shots[cam.shot]&&plan.shots[cam.shot].fly?.5:clamp(cam.fy==null?.5:cam.fy,.1,.9);
   U2.uBlurG=(cam.lastTrans==='cut'?fxv('focus')*14*(1-smooth(clamp(since/.5,0,1))):0)+(cam.lastTrans==='start'?fxv('focus')*10*(1-smooth(clamp(since/.6,0,1))):0);
   let mv=[0,0];const mb=Math.max(fxv('mblur'),cam.whip?.6:0);if(mb>0){const k=fit/50*mb*1.6;mv=[clamp(cam.vx*k,-140,140),clamp(cam.vy*k,-140,140)]}U2.uVel=mv;
@@ -53,9 +55,10 @@ export function renderAt(v){
   const bl=fxv('bloom');U2.uBloom=bl*.6;
   let leak=0;if(bl>0){if(cam.leak&&since<.9&&cam.lastTrans!=='start')leak=Math.sin(Math.PI*since/.9)*bl;if(ot>.5)leak=Math.max(leak,Math.sin(Math.PI*clamp((ot-.5)/2.2,0,1))*bl*.9)}
   U2.uLeak=leak;U2.uLeakPos=ot>.5?[1.05,.05]:cam.leakPos;U2.uLeakHue=cam.leakHue;
-  {const pp=fxv('persp'),sh2=plan.shots[cam.shot],fly=sh2&&sh2.fly,pq=pp*.22,yaw=clamp(cam.vx*fit/view.W*.0035,-.035,.035)*pp/.55+.022*pp*Math.sin(v*.19);
+  {const pp=fxv('persp'),sh2=plan.shots[cam.shot],fly=sh2&&sh2.fly,pq=pp*.22*(S.camMode==='cat'&&addonHasFocus()?1.6:1),yaw=clamp(cam.vx*fit/view.W*.0035,-.035,.035)*pp/.55+.022*pp*Math.sin(v*.19);
    U2.uPersp=[pq*(fly?.8:1),yaw,fxv('lens')*.07];U2.uDof=pp*(.35+.65*smoothstep2(1.1,2.4,cam.z));
    U2.uBreath=1+fxv('lens')*.022*clamp(Math.abs(cam.fyv||0)*2.2,0,1);U2.uTime=v;U2.uGrain=fxv('grain');U2.uDust=fxv('lens')}
+  runHook('late',{v,c});
   penBlur(c,v,st,pw,fit);
   outroAt(v);
   draw();
@@ -70,4 +73,4 @@ export function penBlur(c,v,st,pw,fit){const k=fxv('penblur');if(!penC)return;
   if(!penC.filters||penC.filters[0]!==penMB)penC.filters=[penMB];
   let dx=0,dy=0;if(st.jar==null){const c2=plan.cOf(Math.max(0,v-1/120)),p2=penState(c2),q=P2W(p2.x,p2.y);dx=(pw[0]-q[0])*fit*k*1.6;dy=(pw[1]-q[1])*fit*k*1.6;const L=Math.hypot(dx,dy);if(L>70){dx*=70/L;dy*=70/L}}
   penMB.blurXFilter.blur=Math.abs(dx)*.35;penMB.blurYFilter.blur=Math.abs(dy)*.35}
-export function draw(){app.renderer.render(world,{renderTexture:sceneRT,clear:true});if(OC&&OC.c.visible&&!ed.on){OC.c.position.set(view.W*(OVS-1)/2,view.H*(OVS-1)/2);app.renderer.render(OC.c,{renderTexture:sceneRT,clear:false})}app.renderer.render(post)}
+export function draw(){app.renderer.render(world,{renderTexture:sceneRT,clear:true,blit:true});if(OC&&OC.c.visible&&!ed.on){OC.c.position.set(view.W*(OVS-1)/2,view.H*(OVS-1)/2);app.renderer.render(OC.c,{renderTexture:sceneRT,clear:false,blit:true})}app.renderer.render(post)}
