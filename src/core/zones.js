@@ -100,7 +100,7 @@ export function zoneTone(z,k){const t=z.tones&&z.tones[k];if(!t||!k)return z.col
    labels are smoothed by a majority filter and specks of a few page pixels are merged into their neighbours. */
 export function applySrcColors(src){
   const W=seg.W,H=seg.H;let cv=src;
-  if(src.width!==W||src.height!==H){cv=mk(W,H);const c=cv.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,W,H);c.drawImage(src,0,0,W,H)}
+  if(!src.getContext||src.width!==W||src.height!==H){cv=mk(W,H);const c=cv.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,W,H);c.drawImage(src,0,0,W,H)}
   const d=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H).data,lab=seg.lab,isL=seg.isLine,rank=seg.rank,Z=zones.length;
   rank.fill(0);zones.forEach(z=>{z.tones=null;z.flat=false;z.r.layers=null;z.r.lk=-1;z.r.pArea=0});
   const zi=new Int32Array(seg.regs.length+2).fill(-1);zones.forEach((z,k)=>zi[z.i]=k);

@@ -62,7 +62,7 @@ export function buildScene(){
   if(lineTex)lineTex.destroy(true);if(selTex)selTex.destroy(true);
   lineTex=PIXI.Texture.from(seg.lineTexCv);lineTex.baseTexture.mipmap=PIXI.MIPMAP_MODES.ON;
   selCv=mk(W>>1,H>>1);selCtx=selCv.getContext('2d');selTex=PIXI.Texture.from(selCv);
-  paperShader=PIXI.Shader.from(VERT,PAPER_FRAG,{uColor:colorTex,uLine:lineTex,uPattern:patTex,uSel:selTex,uSelOn:0,uTime:0,uWet0:emptyTex,uWet1:emptyTex,uWetRect0:[0,0,0,0],uWetRect1:[0,0,0,0],uWetStr:0,uTexel:[1/W,1/H],uRelief:0,uCamPhase:0,uNS:7.5,uGloss:1,uHeight:emptyTex,uMat:matTex,uParams:paramTex,uGlit:glitTex,uDefMat:0,uFlat:0,uPxS:1,uCamV:0,uDuoShift:DUO.shift,uGlitDens:GLT.dens,uPatStr:U.patStr,uPatScale:U.patScale,uGrain:U.grain,uShine:-1,uSS:SS});
+  paperShader=PIXI.Shader.from(VERT,PAPER_FRAG,{uColor:colorTex,uLine:lineTex,uPattern:patTex,uSel:selTex,uSelOn:0,uTime:0,uWet0:emptyTex,uWet1:emptyTex,uWetRect0:[0,0,0,0],uWetRect1:[0,0,0,0],uWetStr:0,uTexel:[1/W,1/H],uRelief:0,uCamPhase:0,uNS:7.5,uGloss:1,uHeight:emptyTex,uMat:matTex,uParams:paramTex,uGlit:glitTex,uDefMat:0,uFlat:0,uPxS:1,uCamV:0,uDuoShift:DUO.shift,uGlitDens:GLT.dens,uPatStr:U.patStr,uPatScale:U.patScale,uGrain:U.grain,uShine:-1,uSS:SS,uInk:emptyTex,uInkP:2,uInkW:.01});
   paperMesh=new PIXI.Mesh(quad(0,0,W,H),paperShader);paperC.addChild(paperMesh);
   if(heightRT){heightRT.destroy(true);heightRT=null}
   heightRT=PIXI.RenderTexture.create({width:Math.ceil(W/2),height:Math.ceil(H/2)});

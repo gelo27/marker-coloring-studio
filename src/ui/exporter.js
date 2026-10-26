@@ -31,12 +31,25 @@ function hudEnd(){if(!HUD.on)return;HUD.on=false;const st=document.querySelector
 /* bitrate for a frame size: 22 Mb/s at 1080p60 (15 at 30 fps), scaled by pixel count and the chosen quality */
 export const VQ={high:1.5,std:1,small:.55};
 export function videoBitrate(W,H,fps){return Math.round((fps===60?22e6:15e6)*Math.max(.45,W*H/(1080*1920))*(VQ[$('vq')&&$('vq').value]||1))}
+/* Writing straight to disk (Chrome and Edge on a computer: the File System Access API): the file is picked before the
+   render and every encoded chunk goes to it as it comes, so memory does not grow with the length of the video. Elsewhere
+   the whole video is built in memory and handed over at the end, which limits its size. */
+export const diskOK=()=>typeof window.showSaveFilePicker==='function';
+const toDisk=()=>diskOK()&&$('toDisk')&&$('toDisk').checked;
+/* a note for the size estimate: where the file goes, or a warning when it may not fit in the browser's memory */
+export function sizeNote(mb){if(toDisk())return ' · пишеться одразу на диск';const lim=isMobileUI()?400:1400;
+  return mb>lim*.8?' · ⚠ може не вміститися в пам\'ять браузера: зменште роздільність, частоту кадрів або якість':''}
 /* expected file size for the current settings (video + 192 kb/s audio) */
 export function estimateExport(){if(!plan)return null;const res=+$('res').value,fps=+$('fps').value,[w,h]=FORMATS[view.fmt].map(v=>Math.round(v*res/1080/2)*2);
   const br=videoBitrate(w,h,fps)+(SND.on?192000:0);return{mb:br*plan.total/8/1048576,w,h,frames:Math.ceil(plan.total*fps)}}
 export async function exportVideo(){
   if(busy)return;
   if(ed.on)setMode('anim');if(planDirty)rebuild(false);
+  // the file is chosen first, while the click still counts as a user gesture (the browser asks for it)
+  let fh=null,fws=null;
+  if(toDisk()){const w0=$('vfmt').value==='webm',e0=w0?'webm':'mp4';
+    try{fh=await window.showSaveFilePicker({suggestedName:'marker-coloring-'+view.fmt+'-'+Math.round(plan.total)+'s-'+$('res').value+'p-'+$('fps').value+'fps.'+e0,types:[{description:w0?'WebM video':'MP4 video',accept:{['video/'+e0]:['.'+e0]}}]});fws=await fh.createWritable()}
+    catch(e){if(e&&e.name==='AbortError')return;fh=null;fws=null}}
   setBusy(true);setPlaying(false);stopAudio();setPlayIcon();REN.cancel=false;hudStart();
   if(OUT.on&&document.fonts&&!OUTF){try{const f=await document.fonts.load('100px "Permanent Marker"');if(f&&f.length)setOutroFont(true)}catch(e){}}
   const btn=$('render');btn.disabled=true;$('cancelRender').hidden=false;$('progBox').hidden=false;$('result').hidden=true;$('save').hidden=true;$('prog').style.width='0';
@@ -51,7 +64,10 @@ export async function exportVideo(){
     let A=null,ac=null,aerr=null,aPos=0;
     if(SND.on){$('renderInfo').textContent='Генерую звук…';hud(0,'Генерую звук…');A=await ensureAudio(true);ac=A?await pickAudio(webm):null}
     if(REN.cancel)throw new Error('cancel');
-    const mo=webm?{target:new MX.ArrayBufferTarget(),video:{codec:codec==='vp8'?'V_VP8':'V_VP9',width:W,height:H,frameRate:fps}}:{target:new MX.ArrayBufferTarget(),video:{codec:'avc',width:W,height:H,frameRate:fps},fastStart:'in-memory'};
+    // to disk: chunks are written as they come; an MP4 keeps its index at the front (space reserved for every chunk)
+    const target=()=>fws?new MX.FileSystemWritableFileStreamTarget(fws):new MX.ArrayBufferTarget();
+    const mo=webm?{target:target(),video:{codec:codec==='vp8'?'V_VP8':'V_VP9',width:W,height:H,frameRate:fps}}
+      :{target:target(),video:{codec:'avc',width:W,height:H,frameRate:fps},fastStart:fws?{expectedVideoChunks:frames+8,expectedAudioChunks:Math.ceil(plan.total*SR/960)+64}:'in-memory'};
     if(ac)mo.audio={codec:ac.mux,numberOfChannels:2,sampleRate:SR};
     const muxer=new MX.Muxer(mo);
     if(ac){aenc=new AudioEncoder({output:(ch,meta)=>muxer.addAudioChunk(ch,meta),error:e=>{aerr=e}});aenc.configure({codec:ac.codec,sampleRate:SR,numberOfChannels:2,bitrate:192000})}
@@ -71,9 +87,12 @@ export async function exportVideo(){
       if(i%4===0){const p=(i+1)/frames;$('prog').style.width=(p*100)+'%';const el=(performance.now()-t0)/1000;$('renderInfo').textContent='Кадр '+(i+1)+' з '+frames+' · залишилось ≈ '+Math.max(0,Math.round(el/p-el))+' с';document.title=Math.round(p*100)+'% · Marker Coloring Studio';if(HUD.on)hud(p,'Кадр '+(i+1)+' з '+frames+' · ≈ '+Math.max(0,Math.round(el/p-el))+' с');else updateUI();await sleep(0)}
     }
     await enc.flush();if(aenc)await aenc.flush();muxer.finalize();
-    lastBlob=new Blob([muxer.target.buffer],{type:'video/'+ext});lastName='marker-coloring-'+fmt+'-'+Math.round(plan.total)+'s-'+res+'p-'+fps+'fps.'+ext;ok=true;
+    // a file on disk is only read back for the preview (a File is backed by the disk, not by memory)
+    if(fws){await fws.close();fws=null;lastBlob=await fh.getFile();lastName=fh.name}
+    else{lastBlob=new Blob([muxer.target.buffer],{type:'video/'+ext});lastName='marker-coloring-'+fmt+'-'+Math.round(plan.total)+'s-'+res+'p-'+fps+'fps.'+ext}ok=true;
   }catch(e){
     const m=String(e&&e.message);
+    if(fws){try{await fws.abort()}catch(e2){}fws=null;fh=null}
     if(m==='nocodec'){$('renderInfo').textContent='Браузер не має '+(webm?'VP9/VP8':'H.264')+'-кодера, записую WebM у реальному часі…';try{await recordRealtime(fps,res);ok=!REN.cancel}catch(e2){}}
     else if(m!=='cancel')$('renderInfo').textContent='Рендер зупинився: '+(e&&e.message||e)+'. Спробуйте 30 fps, 720p або інший формат.';
   }finally{
@@ -83,8 +102,8 @@ export async function exportVideo(){
   if(REN.cancel){$('renderInfo').textContent='Рендер скасовано.';$('progBox').hidden=true;seek(keepT);return}
   if(!ok){seek(keepT);return}
   $('prog').style.width='100%';
-  $('renderInfo').textContent='Готово: '+lastName+' · '+(lastBlob.size/1048576).toFixed(1)+' МБ'+(lastAudio==='off'?'':lastAudio==='none'?' · без звуку: браузер не вміє кодувати аудіо':' · звук '+lastAudio);
-  const vd=$('result');vd.src=URL.createObjectURL(lastBlob);vd.hidden=false;$('save').hidden=false;
+  $('renderInfo').textContent=(fh?'Збережено у файл: ':'Готово: ')+lastName+' · '+(lastBlob.size/1048576).toFixed(1)+' МБ'+(lastAudio==='off'?'':lastAudio==='none'?' · без звуку: браузер не вміє кодувати аудіо':' · звук '+lastAudio);
+  const vd=$('result');vd.src=URL.createObjectURL(lastBlob);vd.hidden=false;$('save').hidden=!!fh;
   seek(keepT);
 }
 export async function recordRealtime(fps,res){
@@ -115,3 +134,5 @@ export async function saveVideo(){
   if(dl){try{await dl.save({filename:lastName,data:lastBlob});$('renderInfo').textContent='Файл збережено: '+lastName}catch(e){$('renderInfo').textContent=e&&e.code==='declined'?'Збереження скасовано.':'Не вдалося зберегти файл тут. Відкрийте відео в плеєрі й збережіть через його меню.'}return}
   const a=document.createElement('a');a.href=URL.createObjectURL(lastBlob);a.download=lastName;document.body.appendChild(a);a.click();a.remove();
 }
+/* the "straight to disk" switches (export tab and the wizard's last step) exist only where the browser can do it */
+if(diskOK())['toDiskRow','wToDiskRow'].forEach(id=>{const e=$(id);if(e)e.hidden=false});

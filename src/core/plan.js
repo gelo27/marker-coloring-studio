@@ -1,5 +1,6 @@
 import {addonHasFocus,painters} from '../addons/registry.js';
-import {FLQ,FLY,HP,OUT,S,SHADE,TOOLS,VS,VS_DIRS,view,zoneH,zoneTool} from './settings.js';
+import {FLQ,FLY,HP,INK,OUT,S,SHADE,TOOLS,VS,VS_DIRS,view,zoneH,zoneTool} from './settings.js';
+import {inkPlan} from './inking.js';
 import {STROKE,buildPath} from './strokes.js';
 import {SS,TAU,clamp,ease3,hex2hsl,hsl2hex,lerp,rngOf} from './utils.js';
 import {art,customOrder,orderedZones,pageArea,seg,syncLk,zClose,zCut,zFast,zZoom,zoneByI,zoneTone,zones} from './zones.js';
@@ -86,7 +87,8 @@ export function makePlan(){
   const PN=painters(),par=PN.n>1&&PN.mode==='parallel',PACE=PN.pace||0,WALK=PN.walk||1;
   let order=regsL.concat(late,vsL).map((r,k)=>{const z=zoneByI.get(r.i);r.color=r.shadowOf?vsColor(z.color,r.vsK):r.layerOf?zoneTone(z,r.tidx):z.color;r.fast=zFast(z);r.instant=zCut(z);r.close=zClose(z);r.zoomV=zZoom(z);r.tool=r.shadowOf?'marker':zoneTool(z);const Hz=zoneH(z);r.Hs=Hz.sloppy;r.sf=TOOLS[r.tool].glue?.72:1;r.gs=0;buildPath(r,Hz,S.seed);r.k=k;return r});
   if(!order.length)return {order,shots:[{ts:0,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:1.4,zrate:1,trans:'cut',intro:true}],total:2,endC:1.7,cTotal:2,vTab:null,sparkles:[],cOf:v=>v,vOf:c=>c,revealC:1.7,fly:[]};
-  const intro=1.7,REVEAL=3.8,fly=FLY.mode!=='off'?flySegs():[],flyT=fly.length*FLY.dur;
+  // the opening: a wide shot while the tool comes in (or straight to work), then the inking of the lines if it is on
+  const intro0=S.introWide===false?.6:1.7,ink=INK.on?inkPlan(seg,intro0):null,intro=ink?ink.c1+.7:intro0,REVEAL=3.8,fly=FLY.mode!=='off'?flySegs():[],flyT=fly.length*FLY.dur;
   // a character's camera gets a few seconds for the finale scene before the reveal
   const fin=S.camMode==='cat'&&addonHasFocus()?7:0,outro=fin+(!fly.length?4.8:FLY.mode==='after'?REVEAL+flyT+.2:.5+flyT+REVEAL);
   // free painters help with big zones: those are cut into pieces (runs of whole reach patches) that anyone can take
@@ -130,7 +132,7 @@ export function makePlan(){
    if(a!==0){const e=order[order.length-1].t1;p.turns.push({c0:e+.3,c1:e+1.4,a0:a,a1:0})}}
   p.vOf=c=>{const x=clamp(c/p.dc,0,p.vTab.length-1);const i=Math.floor(x),fr=x-i;return i+1<p.vTab.length?lerp(p.vTab[i],p.vTab[i+1],fr):p.vTab[i]};
   p.cOf=v=>{const T=p.vTab;if(v<=0)return 0;if(v>=T[T.length-1])return (T.length-1)*p.dc;let lo=0,hi=T.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(T[m]<=v)lo=m;else hi=m}return (lo+(v-T[lo])/(T[hi]-T[lo]||1))*p.dc};
-  p.fly=fly;p.shots=buildShots(par?tracks[0]:order,rnd,fly,REVEAL,endC+fin);p.revealC=p.shots.revealC;
+  p.ink=ink;p.fly=fly;p.shots=buildShots(par?tracks[0]:order,rnd,fly,REVEAL,endC+fin,ink);p.revealC=p.shots.revealC;
   p.hasThick=order.some(r=>TOOLS[r.tool].thick);
   const sp=order.filter(r=>!r.isBg).sort((a,b)=>b.area-a.area).slice(0,14);
   p.sparkles=sp.map((r,i)=>({x:r.cx,y:r.cy,d:i*.11,s:.6+rnd()*.6}));
@@ -182,8 +184,10 @@ function splitForHelp(order,n,minW){const out=[];
       const legs=L.map(l=>{const c=Object.assign({},l);c.f0=a/w;a+=l.wt;c.f1=a/w;return c});
       out.push(Object.assign({},r,{legs,pathW:w,part:j,parts:pieces.length,cv:null,cvx:null,done:0}))})});
   return out}
-export function buildShots(order,rnd,fly,REVEAL,Eend){
+export function buildShots(order,rnd,fly,REVEAL,Eend,ink){
   const shots=[{ts:0,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:1.4,zrate:1,trans:'cut',intro:true}];
+  // inking: the camera follows the black tool over the page (a medium shot with the montage, else the whole page)
+  if(ink){const z=S.montage?1.45:1;shots.push({ts:Math.max(0,ink.c0-.25),cx:seg.W/2,cy:seg.H/2,z,follow:z>1?.75:0,rate:1.6,zrate:1.1,trans:'glide',key:'ink',ink:true})}
   const radius=z=>Math.min(view.W,view.H)/(viewFit()*z)/2;
   let cur=null,cutAt=null;
   order.forEach(r=>{
@@ -204,13 +208,15 @@ export function buildShots(order,rnd,fly,REVEAL,Eend){
     cur={key,z,follow,liq:key.startsWith('liq')?{t0:r.t0,t1:r.t1}:null,regs:[r],ax:r.cx,ay:r.cy,trans,rate:key==='wide'?1.1:3.0,zrate:2.2,leak:rnd()<.6,leakPos:[rnd()<.5?-.05:1.05,rnd()],leakHue:rnd(),cutTs:cutAt};cutAt=null;
     shots.push(cur);
   });
-  shots.slice(1).forEach(s=>{let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;s.regs.forEach(r=>{x0=Math.min(x0,r.x0);y0=Math.min(y0,r.y0);x1=Math.max(x1,r.x1);y1=Math.max(y1,r.y1)});s.cx=(x0+x1)/2;s.cy=(y0+y1)/2;const f=s.regs[0];s.ts=s.cutTs!=null?s.cutTs:s.trans==='glide'?f.t0-f.travel:s.liq?f.t0-Math.min(.34,f.travel*.8):f.t0;if(s.key==='wide'){s.cx=seg.W/2;s.cy=seg.H/2}});
+  shots.slice(1).forEach(s=>{if(!s.regs)return;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;s.regs.forEach(r=>{x0=Math.min(x0,r.x0);y0=Math.min(y0,r.y0);x1=Math.max(x1,r.x1);y1=Math.max(y1,r.y1)});s.cx=(x0+x1)/2;s.cy=(y0+y1)/2;const f=s.regs[0];s.ts=s.cutTs!=null?s.cutTs:s.trans==='glide'?f.t0-f.travel:s.liq?f.t0-Math.min(.34,f.travel*.8):f.t0;if(s.key==='wide'){s.cx=seg.W/2;s.cy=seg.H/2}});
   const last=order[order.length-1];
   const E=Eend!=null?Eend:last.t1,D=FLY.dur,mkFly=(f,ts)=>Object.assign({fly:true,ts,dur:D,trans:'cut',follow:0,rate:1,zrate:1,leak:rnd()<.5,leakPos:[rnd()<.5?-.05:1.05,rnd()],leakHue:rnd()},f);
   if(fly.length&&FLY.mode==='before'){fly.forEach((f,k)=>shots.push(mkFly(f,E+.5+k*D)));const rv=E+.5+fly.length*D;
     shots.push({ts:rv,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:.85,zrate:.62,trans:'glide',outro:true});shots.revealC=rv}
   else{shots.push({ts:E,cx:seg.W/2,cy:seg.H/2,z:1,follow:0,rate:1.2,zrate:1.2,trans:'glide',outro:true});shots.revealC=E;
     if(fly.length)fly.forEach((f,k)=>shots.push(mkFly(f,E+REVEAL+k*D)))}
+  // no opening wide shot: the first real shot starts the video with a cut
+  if(S.introWide===false&&shots.length>1){const rc=shots.revealC;shots.shift();Object.assign(shots[0],{ts:0,trans:'cut',cutTs:null});shots.revealC=rc}
   return shots;
 }
 export let planVer=0;

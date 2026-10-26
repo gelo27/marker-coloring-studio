@@ -67,8 +67,8 @@
           <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Завантажити картинку">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="M7 10l5-5 5 5"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
             <b>Перетягніть картинку сюди</b>
-            <span>або натисніть, щоб вибрати файл · PNG, JPG, WebP · чиста або вже зафарбована</span>
-            <input type="file" id="wArtFile" accept="image/*" hidden>
+            <span>або натисніть, щоб вибрати файл · PNG, JPG, WebP · чиста або вже зафарбована · можна дві разом: чисту й розфарбовану — кольори візьмуться з розфарбованої</span>
+            <input type="file" id="wArtFile" accept="image/*" multiple hidden>
           </div>
           <div class="btns"><button class="btn small" id="wDemo">Спробувати демо</button><label class="btn small">Відкрити проєкт…<input type="file" id="wProjFile" accept=".json,application/json"></label></div>
           <span class="lbl">Формат відео</span>
@@ -79,6 +79,7 @@
           <div class="addons" id="wAddons"></div>
           <span class="lbl">Чим малювати</span>
           <div class="tgrid" id="wToolGrid" role="radiogroup" aria-label="Інструмент"></div>
+          <label class="switch"><input type="checkbox" id="wInkOn"> Спершу обвести лінії чорним фломастером</label>
           <p class="hint" id="wArtInfo">Почніть із демо або завантажте свою сторінку.</p>
         </section>
 
@@ -98,7 +99,8 @@
             <div class="btns"><button class="btn small" id="wBrushUndo" disabled>Скасувати мазок</button><button class="btn small" id="wBrushCancel">Скасувати</button><button class="btn small cta" id="wBrushApply" disabled>Готово — створити зону</button></div>
           </div>
           <p class="hint" id="wMaskHint">Якщо ділянку не виділено окремою зоною, натисніть «Намалювати зону» й замалюйте її пензликом — скільки завгодно мазками, з відривом. Гумкою можна підправити краї, двома пальцями чи колесом — масштаб. Замальоване стане однією зоною; лінії малюнка всередині лишаться на папері.</p>
-          <div class="selinfo" id="wZoneSel" hidden><span class="dot" id="wSelDot"></span><b id="wSelName"></b><button class="btn small" id="wSelSkip"></button></div>
+          <div class="selinfo" id="wZoneSel" hidden><span class="dot" id="wSelDot"></span><b id="wSelName"></b><button class="btn small" id="wSelSkip"></button><button class="btn small" id="wSelMerge" hidden></button><button class="btn small" id="wSelUnmerge" hidden>Роз'єднати</button></div>
+          <p class="hint">Shift+клік (або Ctrl+клік) по зонах вибирає кілька — їх можна об'єднати в одну зону: вона замальовується разом і одним кольором.</p>
           <p class="hint">Кожна зона на карті має свій колір. Перевірте, чи не злиплися сусідні ділянки (так буває, коли в контурі розрив) і чи не загубились дрібні деталі. Торкніться зони, щоб вибрати її; колесо або два пальці — масштаб.</p>
         </section>
 
@@ -125,6 +127,7 @@
           <h2>Камера й швидкість</h2>
           <div class="seg" id="wCamMode"><button data-v="montage">Монтаж</button><button data-v="nib">Перо крупно</button><button data-v="cat">Котик крупно</button></div>
           <p class="hint" id="wCamHint"></p>
+          <label class="switch"><input type="checkbox" id="wIntroWide" checked> Загальний план на початку</label>
           <span class="lbl">Пензлик налаштувань: виберіть і торкайтеся зон</span>
           <div class="tags" id="wTags">
             <button data-k="close" data-v="auto">Камера: авто</button><button data-k="close" data-v="on"><i class="lg close"></i>Крупний план</button><button data-k="close" data-v="off"><i class="lg wide"></i>Загальний</button>
@@ -160,6 +163,7 @@
           <div class="row"><label for="wVq">Якість</label><select id="wVq"><option value="high">Висока</option><option value="std">Стандартна</option><option value="small">Компактний файл</option></select></div>
           <label class="switch"><input type="checkbox" id="wSnd" checked> ASMR-звук інструмента</label>
           <label class="switch"><input type="checkbox" id="wOutOn"> Фінальна заставка: лайк і напис</label>
+          <label class="switch" id="wToDiskRow" hidden><input type="checkbox" id="wToDisk" checked> Писати відео одразу у файл на диск (без обмеження розміру)</label>
           <p class="est" id="wEst"></p>
           <button class="btn cta" id="wRender">Зрендерити відео</button>
           <p class="hint">Перед рендером перегляньте ролик кнопкою ▶ під сторінкою. Рендер іде кадр за кадром, прогрес видно під превʼю.</p>
@@ -194,6 +198,8 @@
           <div id="inspBody" hidden class="insp">
             <div class="selhead"><span class="dot" id="selDot"></span><b id="selTitle">1 зона</b><span class="val" id="selArea"></span></div>
             <div class="btns"><button class="btn small" id="selSame">Того ж кольору</button><button class="btn small" id="selAll">Усі</button><button class="btn small" id="selNone">Зняти вибір</button></div>
+            <div class="btns"><button class="btn small" id="zMerge" disabled>Об'єднати вибрані зони</button><button class="btn small" id="zUnmerge" hidden>Роз'єднати</button></div>
+            <p class="hint">Shift+клік (або Ctrl+клік) по карті чи в списку додає зону до вибору; дві й більше вибраних можна об'єднати в одну.</p>
             <span class="lbl">Колір</span>
             <div class="pal" id="zPal"></div>
             <div class="row"><span class="lbl">Свій колір</span><input type="color" id="zColor" value="#ff8fab"></div>
@@ -255,7 +261,7 @@
         <summary>Сторінка</summary>
         <div class="body">
           <div class="btns">
-            <label class="btn">Завантажити сторінку…<input type="file" id="artFile" accept="image/*"></label>
+            <label class="btn">Завантажити сторінку…<input type="file" id="artFile" accept="image/*" multiple></label>
             <button class="btn" id="demo">Демо</button>
           </div>
           <div class="humbox" id="impBox" hidden>
@@ -287,6 +293,20 @@
       <details data-tab="hand" open>
         <summary>Персонажі</summary>
         <div class="body addons" id="addonsA"></div>
+      </details>
+
+      <details data-tab="hand" open>
+        <summary>Обведення ліній <span class="badge" id="inkBadge">вимк.</span></summary>
+        <div class="body">
+          <label class="switch"><input type="checkbox" id="inkOn"> Спершу обвести лінії чорним</label>
+          <div class="humbox" id="inkBox" hidden>
+            <span class="lbl">Чим обводити</span>
+            <div class="seg" id="inkTool"><button data-v="marker" aria-pressed="true">Фломастер</button><button data-v="gel" aria-pressed="false">Гелева ручка</button><button data-v="pencil" aria-pressed="false">Олівець</button></div>
+            <div class="row"><label for="inkDur">Тривалість обведення</label><span class="val" id="inkDurV">авто</span></div>
+            <input type="range" id="inkDur" min="0" max="180" step="1" value="0">
+          </div>
+          <p class="hint">Відео починається з чистого аркуша: інструмент малює лінії картинки штрих за штрихом, як рука, а потім зони зафарбовуються кольорами. «Авто» — тривалість за довжиною ліній, не більше третини відео.</p>
+        </div>
       </details>
 
       <details data-tab="hand" open>
@@ -336,6 +356,8 @@
         <div class="body">
           <div class="seg" id="camMode"><button data-v="montage" aria-pressed="true">Монтаж</button><button data-v="nib" aria-pressed="false">Перо крупно</button><button data-v="cat" aria-pressed="false">Котик крупно</button></div>
           <p class="hint">«Перо крупно» — макрозйомка: камера весь час веде кінчик інструмента, у кадрі лише його передня половина. Початок і фінальний показ сторінки лишаються загальними планами.</p>
+          <label class="switch"><input type="checkbox" id="introWide" checked> Загальний план на початку</label>
+          <p class="hint">Вимкніть, щоб відео одразу починалося з першого плану роботи, без показу всієї сторінки, поки інструмент заходить у кадр.</p>
         </div>
       </details>
 
@@ -429,6 +451,7 @@
           <div class="row"><label for="res">Роздільність</label><select id="res"><option value="1440">1440p (2K)</option><option value="1080" selected>1080p</option><option value="720">720p</option></select></div>
           <div class="row"><label for="fps">Частота кадрів</label><select id="fps"><option value="30">30 fps</option><option value="60" selected>60 fps</option></select></div>
           <div class="row"><label for="vq">Якість</label><select id="vq"><option value="high">Висока</option><option value="std" selected>Стандартна</option><option value="small">Компактний файл</option></select></div>
+          <label class="switch" id="toDiskRow" hidden><input type="checkbox" id="toDisk" checked> Писати відео одразу у файл на диск (без обмеження розміру)</label>
           <p class="est" id="vEst"></p>
           <button class="btn cta" id="render">Зрендерити відео</button>
           <button class="btn" id="frameBtn">Зберегти поточний кадр (PNG)</button>

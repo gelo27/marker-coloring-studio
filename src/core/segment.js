@@ -60,6 +60,15 @@ export function analyze(art){
       a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;b.gone=true}
     if(any){for(let i=0;i<N;i++){const l=lab[i];if(l&&into[l])lab[i]=into[l]}regs=regs.filter(g=>!g.gone)}
     first.forEach(l=>{const g=byI.get(l);if(g)g.user=true})}
+  // zones merged by hand (Shift-select + «Об'єднати»): every group holds one point inside each of its zones; the zones
+  // those points fall in now become one. Points rather than ids, so a merge survives re-segmenting (masks, new settings)
+  if(art.merges&&art.merges.length){const byI=new Map(regs.map(g=>[g.i,g])),into=new Int32Array(R+1),root=l=>{while(into[l])l=into[l];return l};let any=false;
+    for(const grp of art.merges){const ls=[...new Set(grp.map(p=>{const x=Math.round(p[0]),y=Math.round(p[1]);return x>=0&&y>=0&&x<W&&y<H?lab[y*W+x]:0}).filter(Boolean).map(root))];if(ls.length<2)continue;
+      const a=byI.get(ls[0]);if(!a)continue;
+      for(const l of ls.slice(1)){const b=byI.get(l);if(!b||b.gone)continue;const n=a.area+b.area;
+        a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;a.user=a.user||b.user;
+        b.gone=true;into[l]=ls[0];any=true}}
+    if(any){for(let i=0;i<N;i++){const l=lab[i];if(l&&into[l])lab[i]=root(l)}regs=regs.filter(g=>!g.gone)}}
   return {W,H,lab,isLine,lineTexCv,regs,rank:new Int8Array(N)};
 }
 export function loadArtFromImage(img){

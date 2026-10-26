@@ -7,8 +7,8 @@ import {GROUP_RULES,applyPalette,applySrcColors,art,colorGroups,groupedOrder,nex
 import {buildDemo} from '../data/demoArt.js';
 import {drawBrush,ed} from '../editor/editor.js';
 import {ic} from './controls.js';
-import {estimateExport,exportVideo} from './exporter.js';
-import {addToPalette,makeSwatch,selZones,setOrder,setSegValue,setSegValue2,updateInspector,zonesChanged} from './inspector.js';
+import {estimateExport,exportVideo,sizeNote} from './exporter.js';
+import {addToPalette,isMerged,makeSwatch,mergeSel,selZones,setOrder,setSegValue,setSegValue2,unmergeSel,updateInspector,zonesChanged} from './inspector.js';
 import {resegment,setArt} from './load.js';
 import {busy,setMode} from './playback.js';
 import {applyProject,loadImg,lsArm,readURL} from './project.js';
@@ -21,14 +21,40 @@ export const WZ={step:1,brush:'#ff8fab',tag:{k:'close',v:'on'},undo:[]};
 const STEPS=7;
 const zonesWord=n=>n+(n%10===1&&n%100!==11?' зона':n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?' зони':' зон');
 /* ---------- files: picture or project, from the drop zone, a picker or drag & drop anywhere ---------- */
-export async function openFile(f){
+/* Is this the same drawing as the page that is open? Compares the line art of both on small thumbnails (dark pixels of
+   each that have a dark neighbour in the other); a coloured picture and its clean line art come out well above 0.6 */
+function sameDrawing(A,B){if(!A||!B)return false;const ra=A.width/A.height,rb=B.width/B.height;if(Math.abs(ra-rb)/ra>.04)return false;
+  const w=120,h=Math.max(8,Math.round(w/ra)),dark=src=>{const c=mk(w,h),x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(src,0,0,w,h);
+    const d=x.getImageData(0,0,w,h).data,m=new Uint8Array(w*h);for(let i=0;i<w*h;i++)m[i]=d[i*4]+d[i*4+1]+d[i*4+2]<540?1:0;return m};
+  const grow=m=>{const o=new Uint8Array(m.length);for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(!m[y*w+x])continue;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h)o[Y*w+X]=1}}return o};
+  const a=dark(A),b=dark(B),ga=grow(a),gb=grow(b);let na=0,nb=0,ha=0,hb=0;for(let i=0;i<w*h;i++){if(a[i]){na++;if(gb[i])ha++}if(b[i]){nb++;if(ga[i])hb++}}
+  return na>20&&nb>20&&(ha/na+hb/nb)/2>.6}
+/* Several pictures at once: a clean page and its coloured version are recognised as a pair - the page is opened from the
+   line art and its zones take their colours from the coloured one. Otherwise the first picture is opened. */
+export async function openFiles(list,force){
+  const fl=[...(list||[])].filter(Boolean);if(!fl.length||busy)return;
+  const imgs=fl.filter(f=>/^image\//.test(f.type));
+  if(imgs.length>=2){const loaded=[];for(const f of imgs.slice(0,2)){const url=await readURL(f),img=await loadImg(url);loaded.push({f,url,img,a:loadArtFromImage(img)})}
+    const L=loaded.find(q=>!q.a.colored),C=loaded.find(q=>q.a.colored);
+    if(L&&C){await openFile(L.f,{img:C.img,url:C.url,name:C.f.name});return}}
+  await openFile(fl[0],null,force)}
+export async function openFile(f,pair,force){
   if(!f||busy)return;
   if(/\.json$/i.test(f.name)||f.type==='application/json'){
     try{await applyProject(JSON.parse(await f.text()));$('lsInfo').textContent='Відкрито проєкт «'+f.name+'».';lsArm();gotoStep(7)}catch(err){$('wArtInfo').textContent='Не вдалося відкрити файл: це не проєкт студії або він пошкоджений.'}
     return}
   if(!/^image\//.test(f.type)){$('wArtInfo').textContent='Це не картинка. Підійдуть PNG, JPG або WebP.';return}
-  const url=await readURL(f),img=await loadImg(url),a=loadArtFromImage(img);a.srcURL=url;lsArm();
-  setArt(a,true,()=>{$('wArtInfo').textContent='Завантажено «'+f.name+'».';gotoStep(2)});
+  const url=await readURL(f),img=await loadImg(url),a=loadArtFromImage(img);a.srcURL=url;
+  // a coloured version of the page that is already open: its colours go into the zones, the page stays (Shift + drop opens it as a new page)
+  if(!pair&&!force&&a.colored&&art&&seg&&zones.length&&sameDrawing(art.lineCv,a.lineCv)){art.refURL=url;snap(zones);applySrcColors(img);zonesChanged(true);
+    $('wArtInfo').textContent='«'+f.name+'» — розфарбована версія цієї ж сторінки: кольори зон узято з неї (Скасувати на кроці «Кольори» поверне попередні). Щоб відкрити її як нову сторінку, перетягніть її із затиснутим Shift.';gotoStep(3);return}
+  // the clean line art of a page that was opened from its coloured version: cleaner lines, the same colours
+  const keep=!pair&&!force&&!a.colored&&art&&art.colored&&art.srcCv&&seg&&sameDrawing(art.lineCv,a.lineCv)?art.srcCv:null;
+  lsArm();
+  setArt(a,true,()=>{
+    if(pair){art.refURL=pair.url;applySrcColors(pair.img);zonesChanged(true);$('wArtInfo').textContent='Завантажено «'+f.name+'», кольори зон узято з «'+pair.name+'».';gotoStep(3);return}
+    if(keep){applySrcColors(keep);zonesChanged(true);$('wArtInfo').textContent='Завантажено «'+f.name+'»: чисті контури тієї ж сторінки, кольори збережено з попередньої картинки.';gotoStep(3);return}
+    $('wArtInfo').textContent='Завантажено «'+f.name+'».';gotoStep(2)});
 }
 function bindDrop(){
   const ov=$('dropOverlay'),dz=$('dropZone');let depth=0;
@@ -36,9 +62,9 @@ function bindDrop(){
   window.addEventListener('dragenter',e=>{if(!hasFiles(e))return;e.preventDefault();depth++;ov.hidden=false});
   window.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();e.dataTransfer.dropEffect='copy'});
   window.addEventListener('dragleave',e=>{if(!hasFiles(e))return;depth=Math.max(0,depth-1);if(!depth)ov.hidden=true});
-  window.addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();depth=0;ov.hidden=true;openFile(e.dataTransfer.files[0])});
+  window.addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();depth=0;ov.hidden=true;openFiles(e.dataTransfer.files,e.shiftKey)});
   dz.onclick=()=>$('wArtFile').click();dz.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('wArtFile').click()}};
-  $('wArtFile').onchange=e=>{openFile(e.target.files[0]);e.target.value=''};
+  $('wArtFile').onchange=e=>{openFiles(e.target.files);e.target.value=''};
   $('wProjFile').onchange=e=>{openFile(e.target.files[0]);e.target.value=''};
 }
 /* ---------- steps ---------- */
@@ -112,7 +138,7 @@ function syncCam(){setSegValue('wCamMode',S.camMode);setSegValue('camMode',S.cam
 function syncExport(){['res','fps','vq'].forEach(k=>{$('w'+k[0].toUpperCase()+k.slice(1)).value=$(k).value});$('wSnd').checked=SND.on;$('wOutOn').checked=OUT.on;
   const P={short:['9x16','1080','60'],youtube:['16x9','1080','60'],post:['4x5','1080','30'],square:['1x1','1080','30']};
   [...$('wPresets').children].forEach(b=>{const p=P[b.dataset.p];b.setAttribute('aria-pressed',String(p[0]===view.fmt&&p[1]===$('res').value&&p[2]===$('fps').value))});
-  const e=estimateExport(),t=e?'≈ '+(e.mb<10?e.mb.toFixed(1):Math.round(e.mb))+' МБ · '+e.w+'×'+e.h+' · '+e.frames+' кадрів':'';$('wEst').textContent=t;$('vEst').textContent=t}
+  const e=estimateExport(),t=e?'≈ '+(e.mb<10?e.mb.toFixed(1):Math.round(e.mb))+' МБ · '+e.w+'×'+e.h+' · '+e.frames+' кадрів':'';const tt=t&&t+sizeNote(e.mb);$('wEst').textContent=tt;$('vEst').textContent=tt}
 export function syncWizard(){
   if(!$('wiz'))return;const n=WZ.step;
   setSegValue('wFormats',view.fmt);
@@ -127,7 +153,8 @@ export function syncWizard(){
 }
 export function syncWizardSel(){const box=$('wZoneSel');if(!box)return;const sel=selZones();box.hidden=WZ.step!==2||!sel.length;if(box.hidden)return;const z=sel[0];
   $('wSelDot').style.background=z.skip?'transparent':z.color;$('wSelName').textContent=sel.length===1?'Зона #'+z.i+' · '+(z.r.area/pageArea()*100).toFixed(z.r.area/pageArea()<.01?2:1)+'%':sel.length+' зон';
-  $('wSelSkip').textContent=z.skip?'Замальовувати':'Не замальовувати'}
+  $('wSelSkip').textContent=z.skip?'Замальовувати':'Не замальовувати';
+  $('wSelMerge').hidden=sel.length<2;{const n=sel.length,few=n%10>=2&&n%10<=4&&(n%100<12||n%100>14);$('wSelMerge').textContent='Об\'єднати '+n+(few?' зони':' зон')+' в одну'}$('wSelUnmerge').hidden=!(sel.length===1&&isMerged(z))}
 /* ---------- full / step-by-step switch and preview quality ---------- */
 export function setUiMode(m){setSegValue('uiMode',m);const ab=$('steps').querySelector('[data-s="adv"]');if(ab)ab.setAttribute('aria-current',m==='adv'?'page':'false');$('wiz').hidden=m!=='wiz';$('adv').hidden=m!=='adv';document.body.classList.toggle('advmode',m==='adv');try{localStorage.setItem('mcs.ui',m)}catch(e){}
   if(m==='wiz')gotoStep(WZ.step);else{ed.onTap=null;$('modeHint').textContent=ed.on?'Клік: вибрати зону · Shift: додати · колесо: зум':''}}
@@ -172,7 +199,8 @@ export function bindWizard(onPreview){
       else $('wMaskHint').textContent='Не вийшло окремої зони: замалюйте ділянку щільніше.';
       maskUI()})};
   $('wMaskUndo').onclick=()=>{if(!art||!art.masks||!art.masks.length||busy)return;art.masks=art.masks.slice(0,-1);resegment(maskUI)};
-  $('wMaskClear').onclick=()=>{if(!art||busy)return;art.masks=[];art.walls=[];resegment(maskUI)};
+  $('wMaskClear').onclick=()=>{if(!art||busy)return;art.masks=[];art.walls=[];art.merges=[];resegment(maskUI)};
+  $('wSelMerge').onclick=mergeSel;$('wSelUnmerge').onclick=unmergeSel;
   $('wSelSkip').onclick=()=>{const sel=selZones();if(!sel.length)return;const on=!sel[0].skip;sel.forEach(z=>z.skip=on);zonesChanged(true)};
   // step 3
   $('wAddColor').onclick=()=>{const c=$('wColor').value;addToPalette(c);WZ.brush=c;renderWPal()};
@@ -202,6 +230,8 @@ export function bindWizard(onPreview){
   ['res','fps','vq'].forEach(k=>{const w=$('w'+k[0].toUpperCase()+k.slice(1));w.onchange=()=>{$(k).value=w.value;$(k).dispatchEvent(new Event('change'));syncExport()};$(k).addEventListener('change',syncExport)});
   $('wSnd').onchange=e=>{$('sndOn').checked=e.target.checked;$('sndOn').dispatchEvent(new Event('change'))};
   $('wOutOn').onchange=e=>{$('outOn').checked=e.target.checked;$('outOn').dispatchEvent(new Event('change'));syncExport()};
+  // the two "write to disk" switches mirror each other
+  $('wToDisk').onchange=e=>{$('toDisk').checked=e.target.checked;syncWizard()};$('toDisk').onchange=e=>{$('wToDisk').checked=e.target.checked;syncWizard()};
   $('wRender').onclick=()=>{exportVideo();const o=$('renderOut');if(o&&o.scrollIntoView)o.scrollIntoView({block:'nearest',behavior:'smooth'})};
   let m='wiz';try{m=localStorage.getItem('mcs.ui')||'wiz'}catch(e){}setUiMode(m==='adv'?'adv':'wiz');
 }

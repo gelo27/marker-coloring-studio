@@ -2,7 +2,7 @@ precision highp float;varying vec2 vUv;varying vec2 vPos;
 uniform sampler2D uColor;uniform sampler2D uLine;uniform sampler2D uPattern;uniform sampler2D uSel;uniform sampler2D uMat;uniform sampler2D uParams;uniform sampler2D uGlit;uniform sampler2D uHeight;
 uniform sampler2D uWet0;uniform sampler2D uWet1;uniform vec4 uWetRect0;uniform vec4 uWetRect1;uniform float uWetStr;
 uniform float uPatStr;uniform float uPatScale;uniform float uGrain;uniform float uShine;uniform float uSS;uniform float uSelOn;uniform float uTime;uniform vec2 uTexel;
-uniform float uCamV;uniform float uRelief;uniform float uCamPhase;uniform float uNS;uniform float uGloss;uniform float uDefMat;uniform float uFlat;uniform float uPxS;uniform float uDuoShift;uniform float uGlitDens;
+uniform float uCamV;uniform float uRelief;uniform float uCamPhase;uniform float uNS;uniform float uGloss;uniform float uDefMat;uniform float uFlat;uniform float uPxS;uniform float uDuoShift;uniform float uGlitDens;uniform sampler2D uInk;uniform float uInkP;uniform float uInkW;
 #include noise
 float worley(vec2 p){vec2 i=floor(p),f=fract(p);float d=1.5;for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 g=vec2(float(x),float(y));vec2 o=vec2(hash(i+g),hash(i+g+19.31));d=min(d,length(g+o-f));}return d;}
 vec3 paintify(vec3 c){float l=dot(c,vec3(.299,.587,.114));c=clamp(mix(vec3(l),c,1.45),0.,1.);return mix(c,smoothstep(0.,1.,c),.5);}
@@ -131,6 +131,8 @@ void main(){
     col=mix(col,glitterOn(px,base,viv,.62,mGlit),cv);
   }
   float l=texture2D(uLine,vUv).a;
+  // inking: a line pixel shows only once the black tool has passed it
+  if(uInkP<1.5&&uFlat<.5){vec4 it=texture2D(uInk,vUv);float tt=(it.r*65280.+it.g*255.)/65535.;l*=1.-smoothstep(uInkP-uInkW,uInkP,tt);}
   col=mix(col,vec3(.16,.12,.19)*(.92+.16*g),l*.97);
   float d=(px.x*.62+px.y*.78)/1500.-uShine;float band=exp(-d*d/.0035);
   col+=vec3(1.,.97,.93)*band*.28*clamp(c.a,0.,1.)*(.7+.6*p1);

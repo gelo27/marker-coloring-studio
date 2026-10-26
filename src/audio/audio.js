@@ -27,7 +27,7 @@ export async function genAudio(p,onProg){
   for(let trk=0;trk<NT;trk++){const tg=trk?.8:1;
   // control signals from the pen at 1 kHz
   const CR=1000,M=Math.ceil(p.total*CR)+2,px=new Float32Array(M),py=new Float32Array(M),con=new Uint8Array(M),lid=new Int32Array(M),spd=new Float32Array(M),gl=new Float32Array(M),gr=new Float32Array(M),pa=new Float32Array(M),kL=new Float32Array(M).fill(1),kR=new Float32Array(M).fill(1),tl=[];
-  for(let j=0;j<M;j++){const v=Math.min(j/CR,p.total),st=(!trk&&OUT.on&&p.mainTotal!=null&&v>p.mainTotal)?outroSnd(v-p.mainTotal):penState(p.cOf(v),trk);px[j]=st.x;py[j]=st.y;con[j]=((st.kind==='run'||st.kind==='link'||st.kind==='trace')&&st.h<.05)||(st.drop&&st.kind==='pause')?1:0;lid[j]=st.kind==='trace'?-7:st.lid;tl[j]=st.tool||S.tool;
+  for(let j=0;j<M;j++){const v=Math.min(j/CR,p.total),st=(!trk&&OUT.on&&p.mainTotal!=null&&v>p.mainTotal)?outroSnd(v-p.mainTotal):penState(p.cOf(v),trk);px[j]=st.x;py[j]=st.y;con[j]=((st.kind==='run'||st.kind==='link'||st.kind==='trace'||st.kind==='ink')&&st.h<.05)||(st.drop&&st.kind==='pause')?1:0;lid[j]=st.kind==='trace'?-7:st.lid;tl[j]=st.tool||S.tool;
     let pan=clamp((st.x/seg.W-.5)*1.1,-.55,.55),sg=1;if(SP){const q=SP(st.x,st.y,p.cOf(v));pan=q.pan;sg=q.gain;kL[j]=q.lp*(pan>0?1-.5*pan:1);kR[j]=q.lp*(pan<0?1+.5*pan:1)}
     pa[j]=pan;gl[j]=Math.cos((pan+1)*Math.PI/4)*sg;gr[j]=Math.sin((pan+1)*Math.PI/4)*sg}
   for(let j=1;j<M;j++)spd[j]=Math.hypot(px[j]-px[j-1],py[j]-py[j-1])*CR/SS;
@@ -96,6 +96,7 @@ export async function genAudio(p,onProg){
     for(let k=1;k<o.length;k++){const a=o[k-1],b=o[k];if(a.color===b.color&&a.tool===b.tool)continue;const tc=p.vOf(a.t1)+.03+rnd()*.04,to=Math.max(tc+.09,p.vOf(b.t0)-.12-rnd()*.05);
       ev.push({t:tc,type:'close',pan:panOf(a.legs[a.legs.length-1].p1[0]),x:a.legs[a.legs.length-1].p1[0],y:a.legs[a.legs.length-1].p1[1],tool:a.tool});ev.push({t:to,type:'open',pan:panOf(b.legs[0].p0[0]),x:b.legs[0].p0[0],y:b.legs[0].p0[1],tool:b.tool})}
     const L=o[o.length-1];ev.push({t:p.vOf(L.t1)+.12,type:'close',pan:panOf(L.legs[L.legs.length-1].p1[0]),x:L.legs[L.legs.length-1].p1[0],y:L.legs[L.legs.length-1].p1[1],tool:L.tool})}
+  if(p.ink){const I=p.ink;ev.push({t:Math.max(.05,p.vOf(I.c0)-.38),type:'open',pan:clamp((I.start[0]/seg.W-.5)*1.1,-.55,.55),x:I.start[0],y:I.start[1],tool:I.tool});ev.push({t:p.vOf(I.c1)+.06,type:'close',pan:clamp((I.end[0]/seg.W-.5)*1.1,-.55,.55),x:I.end[0],y:I.end[1],tool:I.tool})}
   o.forEach(r=>{if(!TOOLS[r.tool].glue)return;const s0=r.t0+r.dur*r.sf,sd=r.dur*(1-r.sf),pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);const a=p.vOf(s0+sd*(GL.p0+.02)),b=p.vOf(s0+sd*(GL.p1+.04));ev.push({t:a,d:Math.max(.1,b-a),type:'pour',pan:pn,x:r.cx,y:r.cy,tool:r.tool});ev.push({t:p.vOf(s0+sd*(GL.t0+.01)),type:'tap',pan:pn,x:r.cx,y:r.cy,tool:r.tool})});
   if(FLQ.drops)o.forEach(r=>{if(!TOOLS[r.tool].fluid)return;const pn=clamp((r.cx/seg.W-.5)*1.1,-.55,.55);ev.push({t:p.vOf(r.t0),type:'drip',pan:pn,x:r.cx,y:r.cy,tool:r.tool})});
   await prepareAddons();runHook('sound',{put,putS,p});

@@ -1,15 +1,35 @@
 import {setPlanDirty,vsAuto} from '../core/plan.js';
 import {HUM_PRESETS,S,TOOLS} from '../core/settings.js';
 import {$} from '../core/utils.js';
-import {applyPalette,nextPalSeed,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setCustomOrder,setZoneColor,zClose,zFast,zZoom,zoneByI,zones} from '../core/zones.js';
+import {applyPalette,art,nextPalSeed,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setCustomOrder,setZoneColor,zClose,zFast,zZoom,zoneByI,zones} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
 import {applyToolUniforms} from '../render/scene.js';
+import {resegment} from './load.js';
 import {busy,rebuild,setMode} from './playback.js';
 import {lsSchedule} from './project.js';
 import {syncOrderUI,syncWizard,syncWizardSel} from './wizard.js';
 export function setOrder(ids,mode){setCustomOrder(ids,mode);$('orderPreset').value=mode;syncOrderUI();$('orderBadge').textContent=mode==='auto'?'авто':mode==='custom'?'власний':$('orderPreset').selectedOptions[0].textContent.toLowerCase();zonesChanged(ed.view==='order')}
 /* ================= INSPECTOR & PALETTE UI ================= */
 export function selZones(){return[...ed.sel].map(i=>zoneByI.get(i)).filter(Boolean)}
+/* ---------- merging zones ---------- */
+/* a point well inside a zone (its pixel and the ones 3 px around it belong to it), as close to its centre as possible */
+function innerPt(z){const r=z.r,W=seg.W,H=seg.H,L=seg.lab,st=Math.max(1,Math.round(Math.sqrt(r.area)/30));let best=null,bd=1e18,any=null;
+  for(let y=r.y0;y<=r.y1;y+=st)for(let x=r.x0;x<=r.x1;x+=st){if(L[y*W+x]!==z.i)continue;any=any||[x,y];
+    if(L[y*W+Math.min(W-1,x+3)]!==z.i||L[y*W+Math.max(0,x-3)]!==z.i||L[Math.min(H-1,y+3)*W+x]!==z.i||L[Math.max(0,y-3)*W+x]!==z.i)continue;
+    const d=(x-r.cx)**2+(y-r.cy)**2;if(d<bd){bd=d;best=[x,y]}}
+  return best||any}
+const labAt=p=>seg.lab[Math.round(p[1])*seg.W+Math.round(p[0])];
+/* is this zone made of several merged ones */
+export const isMerged=z=>!!(z&&art&&art.merges&&seg&&art.merges.some(g=>g.filter(p=>labAt(p)===z.i).length>=2));
+/* the selected zones become one; it keeps the colour of the zone picked first */
+export function mergeSel(){const sel=selZones();if(sel.length<2||busy||!art)return;
+  const pts=sel.map(innerPt).filter(Boolean);if(pts.length<2)return;const keep={color:sel[0].color,skip:sel[0].skip};
+  art.merges=(art.merges||[]).concat([pts]);lsSchedule();
+  resegment(()=>{const z=zoneByI.get(labAt(pts[0]));ed.sel.clear();if(z){z.color=keep.color;z.skip=keep.skip;ed.sel.add(z.i)}ed.dirtySel=true;zonesChanged(true);updateInspector()})}
+/* splits a merged zone back into its parts */
+export function unmergeSel(){const z=selZones()[0];if(!z||busy||!art||!art.merges)return;
+  art.merges=art.merges.filter(g=>!g.some(p=>labAt(p)===z.i));lsSchedule();
+  resegment(()=>{ed.sel.clear();ed.dirtySel=true;zonesChanged(true);updateInspector()})}
 export function setSegValue(id,val){[...$(id).children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===val))}
 export function renderOrderList(){
   const el=$('orderList');if(!el||!seg)return;el.innerHTML='';
@@ -47,6 +67,7 @@ export function updateInspector(){
   $('selBadge').textContent=sel.length?('вибрано: '+sel.length):'не вибрано';
   $('inspEmpty').hidden=!!sel.length;$('inspBody').hidden=!sel.length;
   if(!sel.length)return;
+  $('zMerge').disabled=sel.length<2;$('zUnmerge').hidden=!(sel.length===1&&isMerged(sel[0]));
   const z=sel[0];
   $('selDot').style.background=z.skip?'transparent':z.color;
   $('selTitle').textContent=sel.length===1?'Зона #'+z.i:sel.length+' зон';
@@ -86,6 +107,7 @@ export function bindInspector(){
   [['zTool','tool'],['zStyle','style'],['zPreset','preset'],['zFill','fill']].forEach(([id,k])=>{$(id).onchange=e=>{selZones().forEach(z=>z[k]=e.target.value);applyToolUniforms();zonesChanged(false)}});
   $('selAll').onclick=()=>{zones.forEach(z=>ed.sel.add(z.i));ed.dirtySel=true;updateInspector()};
   $('selNone').onclick=()=>{ed.sel.clear();ed.dirtySel=true;updateInspector()};
+  $('zMerge').onclick=mergeSel;$('zUnmerge').onclick=unmergeSel;
   $('selSame').onclick=()=>{const c=selZones()[0];if(!c)return;zones.forEach(z=>{if(z.color===c.color)ed.sel.add(z.i)});ed.dirtySel=true;updateInspector()};
   $('addColor').onclick=()=>{addToPalette($('newColor').value)};
   $('newColor').onchange=e=>{addToPalette(e.target.value)};

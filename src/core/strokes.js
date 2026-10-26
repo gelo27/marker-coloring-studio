@@ -22,28 +22,60 @@ export function legPath(ctx,l,f,ox,oy,off){
   for(let i=0;i<=N;i++){const p=legPt(l,f*i/N);i?ctx.lineTo(p[0]+nx*off-ox,p[1]+ny*off-oy):ctx.moveTo(p[0]+nx*off-ox,p[1]+ny*off-oy)}
 }
 export function setTremor(l,w,H,rnd){if(H.on&&H.tremor>0&&l.kind==='run'&&l.len>w*1.5){l.tr=w*.13*H.tremor;l.tw=w;l.ts=rnd()*500}return l}
+/* The hand outline goes round the outer edge of the zone. A merged zone is outlined as one shape, as if its parts were
+   joined (boolean union): the drawing's lines between the parts count as inside, so the loop follows only the outside
+   edge. Parts that do not touch each other at all are outlined each on its own, the tool lifting between the loops. */
 export function traceOutline(r,w,rnd,H){
-  const W=seg.W,id=r.i;let sx=-1,sy=-1;
-  outer:for(let y=r.y0;y<=r.y1;y++)for(let x=r.x0;x<=r.x1;x++)if(inR(r,y*W+x)){sx=x;sy=y;break outer}
-  if(sx<0)return[];
+  const W=seg.W,bw=r.x1-r.x0+1,bh=r.y1-r.y0+1,M=bw*bh,base=new Uint8Array(M);
+  for(let y=0;y<bh;y++)for(let x=0;x<bw;x++)if(inR(r,(y+r.y0)*W+x+r.x0))base[y*bw+x]=1;
+  const minPart=Math.max(150,w*w*1.5);
+  let mask=base,comps=components(mask,bw,bh,minPart);
+  // close the gaps between the parts (the lines between them) - dilate, then erode by as much as is needed to join them
+  // (only the drawing's own line pixels may be filled: parts that meet across a line join, parts with another zone between them do not)
+  for(let rad=4;comps.big.length>1&&rad<=36;rad+=4){const m=closeMask(base,bw,bh,rad);for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const k=y*bw+x;if(m[k]&&!base[k]&&!seg.isLine[(y+r.y0)*W+x+r.x0])m[k]=0}
+    const c=components(m,bw,bh,minPart);if(c.big.length<comps.big.length){mask=m;comps=c}if(c.big.length<=1)break}
+  const big=comps.big.slice().sort((a,b)=>b.n-a.n);if(!big.length)return[];
+  const legs=[];let last=null;
+  while(big.length){let k=0;if(last){let bd=1e18;big.forEach((p,j)=>{const d=Math.hypot(p.sx+r.x0-last[0],p.sy+r.y0-last[1]);if(d<bd){bd=d;k=j}})}
+    const p=big.splice(k,1)[0],lab=comps.lab,inC=(x,y)=>x>=r.x0&&y>=r.y0&&x<=r.x1&&y<=r.y1&&lab[(y-r.y0)*bw+(x-r.x0)]===p.c,loop=traceLoop(r,w,rnd,H,p.sx+r.x0,p.sy+r.y0,inC);
+    if(!loop.length)continue;if(last)legs.push(mkLeg(last,loop[0].p0,'jump',0,.76,1));legs.push(...loop);last=loop[loop.length-1].p1}
+  return legs}
+/* 4-connected parts of a mask; big = parts of at least minN pixels, with their top-left pixel */
+function components(m,bw,bh,minN){const lab=new Int32Array(bw*bh),stack=new Int32Array(bw*bh),big=[];let C=0;
+  for(let i=0;i<bw*bh;i++){if(!m[i]||lab[i])continue;C++;let sp=0,n=0;stack[sp++]=i;lab[i]=C;
+    while(sp){const q=stack[--sp],qx=q%bw;n++;
+      if(qx>0&&m[q-1]&&!lab[q-1]){lab[q-1]=C;stack[sp++]=q-1}if(qx<bw-1&&m[q+1]&&!lab[q+1]){lab[q+1]=C;stack[sp++]=q+1}
+      if(q>=bw&&m[q-bw]&&!lab[q-bw]){lab[q-bw]=C;stack[sp++]=q-bw}if(q<bw*(bh-1)&&m[q+bw]&&!lab[q+bw]){lab[q+bw]=C;stack[sp++]=q+bw}}
+    if(n>=minN)big.push({c:C,n,sx:i%bw,sy:(i/bw)|0})}
+  return{lab,big}}
+/* morphological closing with a square of radius rad: fills gaps narrower than 2*rad, keeps the outer edge in place
+   (beyond the box counts as empty, and the zone itself is always kept) */
+function closeMask(m,bw,bh,rad){
+  const pass=(src,val,horiz)=>{const out=new Uint8Array(bw*bh),len=horiz?bw:bh,lines=horiz?bh:bw;
+    for(let l=0;l<lines;l++){let cnt=0;const at=i=>horiz?l*bw+i:i*bw+l;
+      for(let i=0;i<Math.min(rad,len);i++)if(src[at(i)]===val)cnt++;
+      for(let i=0;i<len;i++){const a=i+rad,b=i-rad-1;if(a<len&&src[at(a)]===val)cnt++;if(b>=0&&src[at(b)]===val)cnt--;out[at(i)]=val===1?(cnt>0?1:0):(cnt>0||i-rad<0||i+rad>=len?0:1)}}
+    return out};
+  const dil=pass(pass(m,1,true),1,false),er=pass(pass(dil,0,true),0,false);for(let i=0;i<er.length;i++)er[i]|=m[i];return er}
+/* one closed outline round the part that inC says a pixel belongs to, starting at its top-left pixel (sx,sy) */
+function traceLoop(r,w,rnd,H,sx,sy,inC){
   const DX=[1,1,0,-1,-1,-1,0,1],DY=[0,1,1,1,0,-1,-1,-1];
   const pts=[[sx,sy]];let cx=sx,cy=sy,d=0;const cap=(r.x1-r.x0+r.y1-r.y0)*8+100;
-  for(let n=0;n<cap;n++){let found=false;for(let k=0;k<8;k++){const dd=(d+5+k)%8;const nx=cx+DX[dd],ny=cy+DY[dd];if(nx>=0&&ny>=0&&nx<W&&ny<seg.H&&inR(r,ny*W+nx)){cx=nx;cy=ny;d=dd;found=true;break}}
+  for(let n=0;n<cap;n++){let found=false;for(let k=0;k<8;k++){const dd=(d+5+k)%8;const nx=cx+DX[dd],ny=cy+DY[dd];if(inC(nx,ny)){cx=nx;cy=ny;d=dd;found=true;break}}
     if(!found)break;if(cx===sx&&cy===sy)break;pts.push([cx,cy])}
   if(pts.length<12)return[];
   const step=w*.55,res=[];let acc=0;res.push(pts[0]);
   for(let i=1;i<pts.length;i++){acc+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(acc>=step){res.push(pts[i]);acc=0}}
   if(res.length<4)return[];
-  const n=res.length,off=w*.42,out=[],seed=rnd()*300,vary=H.sloppy+H.jitter*.5;
+  const n=res.length,off=w*.42,out=[],seed=rnd()*300,vary=H.sloppy+H.jitter*.5,ins=(x,y)=>inC(Math.round(x),Math.round(y));
   for(let i=0;i<n;i++){const a=res[(i-1+n)%n],b=res[(i+1)%n];let tx=b[0]-a[0],ty=b[1]-a[1];const L=Math.hypot(tx,ty)||1;tx/=L;ty/=L;let nx=-ty,ny=tx;
     const o=off*(1+(rnd()-.5)*.5*vary)+(vn1(seed+i*.33)-.5)*w*.22*H.tremor;let p=[res[i][0]+nx*o,res[i][1]+ny*o];
-    if(!inside(r,p[0],p[1])){p=[res[i][0]-nx*o,res[i][1]-ny*o];if(!inside(r,p[0],p[1]))p=res[i].slice()}
+    if(!ins(p[0],p[1])){p=[res[i][0]-nx*o,res[i][1]-ny*o];if(!ins(p[0],p[1]))p=res[i].slice()}
     out.push(p)}
   for(let it=0;it<2;it++){const cp=out.map(p=>p.slice());for(let i=0;i<n;i++){const a=cp[(i-1+n)%n],b=cp[(i+1)%n];out[i]=[(a[0]+2*cp[i][0]+b[0])/4,(a[1]+2*cp[i][1]+b[1])/4]}}
   const st=Math.floor(rnd()*n),legs=[];const extra=Math.ceil(n*.06)+1;
   for(let k=0;k<n+extra;k++){const p0=out[(st+k)%n],p1=out[(st+k+1)%n];legs.push(mkLeg(p0,p1,'trace',0,clamp(.76+(rnd()-.5)*.2*H.pressure,.6,.9),.85))}
-  return legs;
-}
+  return legs}
 export function scribble(r,w,rnd,H){
   const R=Math.sqrt(r.area/Math.PI),legs=[];let prev=null;const loops=Math.max(1,Math.round(R/(w*.45)));
   for(let l=0;l<loops;l++){const rr=Math.max(w*.15,R*(1-l/loops)-w*.35);const segs=9,a0=rnd()*TAU;

@@ -3,7 +3,7 @@ import {addonsState,applyAddonsState} from '../addons/registry.js';
 import {SND,stopAudio} from '../audio/audio.js';
 import {plan} from '../core/plan.js';
 import {loadArtFromImage} from '../core/segment.js';
-import {DESK,DUO,FLQ,FLY,FORMATS,GLT,HUM_DEF,HUM_META,IMP,OUT,PUFF,S,SHADE,TOOLS,U,VS,view} from '../core/settings.js';
+import {DESK,DUO,FLQ,FLY,FORMATS,GLT,HUM_DEF,HUM_META,IMP,INK,OUT,PUFF,S,SHADE,TOOLS,U,VS,view} from '../core/settings.js';
 import {$,durLabel,mk} from '../core/utils.js';
 import {applySrcColors,art,customOrder,orderMode,palette,seg,setCustomOrder,setPalette,zoneByI,zones} from '../core/zones.js';
 import {buildDemo} from '../data/demoArt.js';
@@ -29,8 +29,8 @@ export async function setDeskImage(url,name,auto){
 export function projectData(img){
   const pick=(o,ks)=>{const r={};ks.forEach(k=>r[k]=o[k]);return r};
   return{app:'marker-coloring-studio',v:1,saved:new Date().toISOString(),
-    art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null,masks:art.masks&&art.masks.length?art.masks:null}),
-    S:{camMode:S.camMode,tool:S.tool,duration:S.duration,montage:S.montage,wideBig:S.wideBig,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
+    art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null,masks:art.masks&&art.masks.length?art.masks:null,merges:art.merges&&art.merges.length?art.merges:null}),
+    INK:Object.assign({},INK),S:{camMode:S.camMode,tool:S.tool,duration:S.duration,montage:S.montage,wideBig:S.wideBig,introWide:S.introWide!==false,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
     U:Object.assign({},U),PUFF:Object.assign({},PUFF),DUO:Object.assign({},DUO),GLT:Object.assign({},GLT),IMP:Object.assign({},IMP),SHADE:Object.assign({},SHADE),
     SND:Object.assign(pick(SND,['on','vol','strokes','events','room','reverb']),{tools:JSON.parse(JSON.stringify(SND.tools||{}))}),FLY:JSON.parse(JSON.stringify(FLY)),
     desk:Object.assign(pick(DESK,['mode','scale','bright','blur','tint']),{img:img?DESK.src||null:null}),
@@ -38,7 +38,11 @@ export function projectData(img){
     order:{custom:customOrder,mode:orderMode},palette:palette.slice(),
     zones:zones.map(z=>({i:z.i,color:z.color,skip:!!z.skip,flat:!!z.flat,close:z.close,zoom:z.zoom,speed:z.speed,tmul:z.tmul||1,vshade:z.vshade||'auto',tool:z.tool||'',style:z.style||'',preset:z.preset||'',fill:z.fill||''}))};
 }
+/* the inking and opening-shot controls (tool tab, camera tab and the wizard) */
+export function syncInk(){$('inkOn').checked=$('wInkOn').checked=!!INK.on;$('inkBox').hidden=!INK.on;$('inkBadge').textContent=INK.on?'увімк.':'вимк.';setSegValue('inkTool',INK.tool||'marker');
+  $('inkDur').value=INK.dur||0;$('inkDurV').textContent=INK.dur>0?durLabel(INK.dur):'авто';$('introWide').checked=$('wIntroWide').checked=S.introWide!==false}
 export function syncUI(){
+  syncInk();
   const setv=(id,v,txt,vid)=>{const e=$(id);if(!e)return;if(e.type==='checkbox')e.checked=!!v;else e.value=v;if(vid)$(vid).textContent=txt};
   setv('dur',S.duration,durLabel(S.duration),'durV');setv('fastMul',S.fastMul,'×'+(+S.fastMul).toFixed(1),'fastMulV');setv('montage',S.montage);setv('wideBig',S.wideBig!==false);
   [...$('styleSeg').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.s==='human')===S.human));$('humBox').setAttribute('aria-disabled',String(!S.human));
@@ -60,7 +64,8 @@ export function syncUI(){
 export async function applyProject(d){
   if(!d||d.app!=='marker-coloring-studio')throw new Error('bad');
   setPlaying(false);stopAudio();setPlayIcon();
-  const s=d.S||{};['camMode','tool','duration','montage','wideBig','human','humPreset','fastMul','seed'].forEach(k=>{if(s[k]!==undefined)S[k]=s[k]});
+  const s=d.S||{};['camMode','tool','duration','montage','wideBig','introWide','human','humPreset','fastMul','seed'].forEach(k=>{if(s[k]!==undefined)S[k]=s[k]});
+  Object.assign(INK,{on:false,tool:'marker',dur:0},d.INK||{});if(s.introWide===undefined)S.introWide=true;
   if(!TOOLS[S.tool])S.tool='marker';
   S.hum=Object.assign({},HUM_DEF,s.hum||{});if(s.fx)Object.keys(s.fx).forEach(k=>{if(S.fx[k])Object.assign(S.fx[k],s.fx[k])});
   [[U,d.U],[PUFF,d.PUFF],[DUO,d.DUO],[GLT,d.GLT],[IMP,d.IMP],[SHADE,d.SHADE],[SND,d.SND]].forEach(([a,b])=>{if(b)Object.assign(a,b)});
@@ -76,7 +81,7 @@ export async function applyProject(d){
   if(d.art&&d.art.demo)a=buildDemo();
   else if(d.art&&d.art.src){const im=await loadImg(d.art.src);a=loadArtFromImage(im);a.srcURL=d.art.src}
   else throw new Error('noimg');
-  if(d.art&&d.art.walls)a.walls=d.art.walls;if(d.art&&d.art.masks)a.masks=d.art.masks;
+  if(d.art&&d.art.walls)a.walls=d.art.walls;if(d.art&&d.art.masks)a.masks=d.art.masks;if(d.art&&d.art.merges)a.merges=d.art.merges;
   const refIm=d.art&&d.art.ref?await loadImg(d.art.ref):null;
   await new Promise(res=>setArt(a,false,()=>{
     if(refIm){applySrcColors(refIm);art.refURL=d.art.ref}

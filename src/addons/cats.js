@@ -330,16 +330,18 @@ function hide(){C.fr=null;C.cats.forEach(o=>{o.back.visible=o.front.visible=fals
 function render(cfg,f){
   if(!plan||!plan.order||!plan.order.length||!penC||!penC.parent||!seg){hide();return}
   const T=build(cfg),u=catH(cfg),c=f.c,fi=clamp(c/DT,0,T.N-1.001),i=Math.floor(fi),fr=fi-i,wob=.03*Math.sin(f.v*1.9);
+  // inking the lines first: that is the hand's tool, as without the cats; the cats wait for the colouring
+  const inking=!!f.st.ink;
   // the lead tool: smaller, held tip down-left in front of the cat
-  const k0=toolK(cfg,f.st.tool||'marker');penC.scale.x*=k0;penC.scale.y*=k0;const lsd=at(T.cats[T.relay?T.own[i]:0].sid,fr,i);penC.rotation=toolAng(lsd)+wob-.04*f.h*lsd;
-  penShadow.scale.x*=k0;penShadow.scale.y*=k0;{const lk=toolLook(penC.rotation);penShadow.rotation=lk.shRot;penShadow.scale.x*=lk.shLen;if(lk.flip){penC.scale.y*=-1;penShadow.scale.y*=-1}}penShadow.position.set(f.pw[0]+(penShadow.position.x-f.pw[0])*k0,f.pw[1]+(penShadow.position.y-f.pw[1])*k0);
+  const k0=inking?1:toolK(cfg,f.st.tool||'marker'),lsd=at(T.cats[T.relay?T.own[i]:0].sid,fr,i);if(!inking){penC.scale.x*=k0;penC.scale.y*=k0;penC.rotation=toolAng(lsd)+wob-.04*f.h*lsd;
+  penShadow.scale.x*=k0;penShadow.scale.y*=k0;{const lk=toolLook(penC.rotation);penShadow.rotation=lk.shRot;penShadow.scale.x*=lk.shLen;if(lk.flip){penC.scale.y*=-1;penShadow.scale.y*=-1}}penShadow.position.set(f.pw[0]+(penShadow.position.x-f.pw[0])*k0,f.pw[1]+(penShadow.position.y-f.pw[1])*k0);}
   // on a walk between zones the tool rides in the paws (so it can swap paws), blended in and out over the walk
   const carry=st=>st.kind==='air'&&st.tf!=null?Math.pow(Math.sin(Math.PI*clamp(st.tf,0,1)),.8):0;
   const heldTip=(m,tool,sd)=>{const a=toolAng(sd),L=(TOOL_LEN[tool]||560)*SS*toolK(cfg,tool),bx=at(m.bx,fr,i),by=at(m.by,fr,i);return P2W(bx-.3*u*sd-Math.cos(a)*L*.62,by-.05*u-Math.sin(a)*L*.62)};
-  let lpw=f.pw;{const w=carry(f.st);if(w>0){const q=heldTip(T.cats[T.relay?T.own[i]:0],f.st.tool||'marker',lsd),dx=(q[0]-f.pw[0])*w,dy=(q[1]-f.pw[1])*w;lpw=[f.pw[0]+dx,f.pw[1]+dy];penC.position.set(lpw[0],lpw[1]);penShadow.position.set(penShadow.position.x+dx,penShadow.position.y+dy)}}
+  let lpw=f.pw;if(!inking){const w=carry(f.st);if(w>0){const q=heldTip(T.cats[T.relay?T.own[i]:0],f.st.tool||'marker',lsd),dx=(q[0]-f.pw[0])*w,dy=(q[1]-f.pw[1])*w;lpw=[f.pw[0]+dx,f.pw[1]+dy];penC.position.set(lpw[0],lpw[1]);penShadow.position.set(penShadow.position.x+dx,penShadow.position.y+dy)}}
   // a cat that is done has put its tool down
   if(c>=(T.relay?T.F:T.cats[0].done)){penC.visible=false;penShadow.visible=false}
-  const pens=[{pw:lpw,rot:penC.rotation,L:(TOOL_LEN[f.st.tool]||560)*SS*penC.scale.x,vis:penC.visible}];
+  const pens=[{pw:lpw,rot:penC.rotation,L:(TOOL_LEN[f.st.tool]||560)*SS*penC.scale.x,vis:penC.visible&&!inking}];
   if(!T.relay)for(let k=1;k<T.n;k++){const st=penState(c,k),tool=st.tool||'marker',p=penObj(k,tool),kk=toolK(cfg,tool),h=st.h||0,sk=at(T.cats[k].sid,fr,i);let pw=P2W(st.x,st.y);{const w=carry(st);if(w>0){const q=heldTip(T.cats[k],tool,sk);pw=[lerp(pw[0],q[0],w),lerp(pw[1],q[1],w)]}}
     p.c.visible=p.sh.visible=st.jar==null&&c<T.cats[k].done;p.tint.forEach(g=>g.tint=col(st.color||'#888888'));p.c.position.set(pw[0],pw[1]);p.c.rotation=toolAng(sk)+.03*Math.sin(f.v*1.7+k)-.04*h*sk;p.c.scale.set(kk*(1+.05*h));
     p.sh.position.set(pw[0]+(4+38*h)*SS*kk,pw[1]+(6+52*h)*SS*kk);{const lk=toolLook(p.c.rotation);p.sh.rotation=lk.shRot;p.sh.scale.set(kk*(1+.03*h)*lk.shLen,kk*(1+.03*h)*(lk.flip?-1:1));if(lk.flip)p.c.scale.y*=-1}shadowHover(p.sh,h);
