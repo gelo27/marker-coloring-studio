@@ -88,6 +88,11 @@
           <div class="chips" id="wZoneStats"></div>
           <ul class="warn" id="wZoneWarn"></ul>
           <div class="seg" id="wZoneView"><button data-v="map">Карта зон</button><button data-v="final">Кольори</button></div>
+          <div class="humbox" id="wVecBox" hidden>
+            <label class="switch"><input type="checkbox" id="wVec" checked> Покращити якість контурів</label>
+            <div class="row sl"><label for="wVecSm">Згладжування</label><input type="range" id="wVecSm" min="0" max="3" step="0.5" value="1"><span class="val" id="wVecSmV">1</span></div>
+            <p class="hint">Маленька чорно-біла картинка трасується у вектор і заново малюється у робочому розмірі — лінії чіткі замість розмитих.</p>
+          </div>
           <div class="row sl"><label for="wLineK">Чутливість контуру</label><input type="range" id="wLineK" min="0.2" max="0.7" step="0.01" value="0.42"><span class="val" id="wLineKV">0.42</span></div>
           <div class="row sl"><label for="wMinArea">Найменша зона</label><input type="range" id="wMinArea" min="20" max="600" step="5" value="95"><span class="val" id="wMinAreaV">95</span></div>
           <button class="btn small" id="wReseg">Перерахувати зони</button>
@@ -270,6 +275,11 @@
             <input type="range" id="impThr" min="0.15" max="0.6" step="0.01" value="0.38">
             <label class="switch"><input type="checkbox" id="impShade" checked> Тіні, відблиски й додаткові штрихи</label>
             <div class="row"><label for="impWhen">Коли класти тіні</label><select id="impWhen"><option value="zone">Одразу після зони</option><option value="end">Після всіх базових кольорів</option></select></div>
+          </div>
+          <div class="humbox" id="impVecBox" hidden>
+            <label class="switch"><input type="checkbox" id="impVec" checked> Покращити якість контурів</label>
+            <div class="row sl"><label for="impVecSm">Згладжування</label><input type="range" id="impVecSm" min="0" max="3" step="0.5" value="1"><span class="val" id="impVecSmV">1</span></div>
+            <p class="hint">Маленька чорно-біла картинка трасується у вектор і заново малюється у робочому розмірі — лінії чіткі замість розмитих.</p>
           </div>
           <div class="btns"><label class="btn small">Кольори з картинки…<input type="file" id="refFile" accept="image/*"></label></div>
           <p class="hint" id="artInfo">Підійде чиста розмальовка або вже зафарбована. У зафарбованої контури виділяються автоматично, а кольори, тіні й відблиски зон беруться з оригіналу.</p>

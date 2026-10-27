@@ -55,7 +55,7 @@ export function syncUI(){
   setv('sndOn',SND.on);$('sndBadge').textContent=SND.on?'ASMR':'вимк.';setv('sndVol',SND.vol,Math.round(SND.vol*100),'sndVolV');
   [['sndStrokes','strokes'],['sndEvents','events'],['sndRoom','room'],['sndRev','reverb']].forEach(([id,k])=>setv(id,SND[k],Math.round(SND[k]*100),id+'V'));if(!SND.tools)SND.tools={};syncSound();
   setSegValue('flyMode',FLY.mode);setv('flyDur',FLY.dur,(+FLY.dur).toFixed(1)+' с','flyDurV');setv('flyCount',FLY.count,FLY.count,'flyCountV');setv('flyZoom',FLY.zoomMul,'×'+(+FLY.zoomMul).toFixed(2),'flyZoomV');
-  setv('impColors',IMP.useColors);setv('impThr',IMP.thr,(+IMP.thr).toFixed(2),'impThrV');setv('impShade',SHADE.on);setv('impWhen',SHADE.when);
+  setv('impColors',IMP.useColors);['imp','w'].forEach(p=>{setv(p+'Vec',IMP.vec);setv(p+'VecSm',IMP.vecSm,String(IMP.vecSm),p+'VecSmV')});setv('impThr',IMP.thr,(+IMP.thr).toFixed(2),'impThrV');setv('impShade',SHADE.on);setv('impWhen',SHADE.when);
   setv('puffRel',PUFF.ns,PUFF.ns,'puffRelV');setv('puffGloss',PUFF.gloss,(+PUFF.gloss).toFixed(2),'puffGlossV');
   setv('outOn',OUT.on);$('outBox').hidden=!OUT.on;setv('outDur',OUT.dur,(+OUT.dur).toFixed(1).replace('.0','')+' с','outDurV');setv('outText',OUT.text);setv('outColor',OUT.color);setv('outStyle',OUT.style||'hand');setv('vsOn',VS.on);setv('vsDir',VS.dir);setv('vsStyle',VS.style||'solid');setv('vsW',VS.w,(+VS.w).toFixed(2),'vsWV');setv('vsDark',VS.dark,(+VS.dark).toFixed(2),'vsDarkV');$('vsBadge').textContent=VS.on?'увімк.':'вимк.';
   setv('liqPrev',FLQ.prev);setv('liqRender',FLQ.render);setv('liqMix',FLQ.mix);setv('liqDrops',FLQ.drops);setv('liqBlooms',FLQ.blooms);setv('liqCine',FLQ.cine);setv('liqGloss',FLQ.gloss);

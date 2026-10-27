@@ -1,5 +1,6 @@
 import {IMP} from './settings.js';
 import {SS,clamp,mk} from './utils.js';
+import {VEC_MIN_K,vectorUpscale} from './vectorize.js';
 /* ================= SEGMENTATION ================= */
 /* a zone the user painted with the brush: strokes {e: eraser, r: radius, p: points} in page pixels, drawn at scale k */
 export function drawMask(x,strokes,k){x.lineCap='round';x.lineJoin='round';
@@ -75,9 +76,16 @@ export function loadArtFromImage(img){
   const maxW=1080*SS;const sc=maxW/img.width;let W=Math.round(img.width*sc),H=Math.round(img.height*sc);
   if(H>1800*SS){const k=1800*SS/H;W=Math.round(W*k);H=Math.round(H*k)}
   const cv=mk(W,H),c=cv.getContext('2d',{willReadFrequently:true});c.fillStyle='#fff';c.fillRect(0,0,W,H);c.drawImage(img,0,0,W,H);
-  const colored=isColored(cv);
-  return{W,H,srcCv:cv,lineCv:colored?extractLines(cv,IMP.thr):cv,idCv:null,demo:false,colored};
+  const colored=isColored(cv),a={W,H,srcCv:cv,lineCv:colored?extractLines(cv,IMP.thr):cv,idCv:null,demo:false,colored};
+  // a small clean page: its outline is traced and filled again at the working size instead of stretching the pixels
+  if(!colored&&W/img.width>=VEC_MIN_K){const raw=mk(img.width,img.height),rx=raw.getContext('2d',{willReadFrequently:true});rx.fillStyle='#fff';rx.fillRect(0,0,raw.width,raw.height);rx.drawImage(img,0,0);
+    a.rawCv=raw;retrace(a)}
+  return a;
 }
+/* the page's lines from its own-resolution copy: traced when IMP.vec is on, otherwise just stretched */
+export function retrace(a){if(!a.rawCv)return;
+  if(IMP.vec){a.lineCv=a.srcCv=vectorUpscale(a.rawCv,a.W,a.H,IMP.lineK,IMP.vecSm);a.vec=+(a.W/a.rawCv.width).toFixed(1)}
+  else{const cv=mk(a.W,a.H),c=cv.getContext('2d',{willReadFrequently:true});c.fillStyle='#fff';c.fillRect(0,0,a.W,a.H);c.drawImage(a.rawCv,0,0,a.W,a.H);a.lineCv=a.srcCv=cv;a.vec=0}}
 export function isColored(cv){const d=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let n=0,t=0;
   for(let i=0;i<d.length;i+=4*97){t++;const r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);if(mx>60&&mx<252&&(mx-mn)/mx>.22)n++}return n/t>.04}
 /* colored page -> clean line art: dark, low-saturation pixels are outline; colored fills become white */

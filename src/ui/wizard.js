@@ -1,6 +1,6 @@
 import {addonOn} from '../addons/registry.js';
 import {SND} from '../audio/audio.js';
-import {drawMask,extractLines,loadArtFromImage} from '../core/segment.js';
+import {drawMask,extractLines,loadArtFromImage,retrace} from '../core/segment.js';
 import {IMP,OUT,PREV,S,SHADE,TOOLS,isMobileUI,view} from '../core/settings.js';
 import {$,clamp,durLabel,mk} from '../core/utils.js';
 import {GROUP_RULES,applyPalette,applySrcColors,art,colorGroups,groupedOrder,nextPalSeed,orderFromGroups,orderMode,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setZoneColor,zoneByI,zones} from '../core/zones.js';
@@ -179,8 +179,13 @@ export function bindWizard(onPreview){
   $('wLineK').oninput=e=>{$('wLineKV').textContent=(+e.target.value).toFixed(2)};
   $('wMinArea').oninput=e=>{$('wMinAreaV').textContent=e.target.value};
   $('wReseg').onclick=()=>{if(!art||busy)return;const v=+$('wLineK').value;IMP.minArea=+$('wMinArea').value;
-    if(art.colored){IMP.thr=v;$('impThr').value=v;$('impThrV').textContent=v.toFixed(2);art.lineCv=extractLines(art.srcCv,IMP.thr)}else IMP.lineK=v;
+    if(art.colored){IMP.thr=v;$('impThr').value=v;$('impThrV').textContent=v.toFixed(2);art.lineCv=extractLines(art.srcCv,IMP.thr)}else{IMP.lineK=v;if(IMP.vec)retrace(art)}
     setArt(art,true,()=>gotoStep(2))};
+  // the traced outline of a small clean page: on/off and smoothing; both copies of the controls stay in step
+  ['imp','w'].forEach(p=>{
+    $(p+'Vec').onchange=e=>{IMP.vec=e.target.checked;$('impVec').checked=$('wVec').checked=IMP.vec;if(!art||!art.rawCv||busy)return;retrace(art);setArt(art,true,p==='w'?()=>gotoStep(2):null)};
+    $(p+'VecSm').oninput=e=>{$('impVecSmV').textContent=$('wVecSmV').textContent=e.target.value};
+    $(p+'VecSm').onchange=e=>{IMP.vecSm=+e.target.value;$('impVecSm').value=$('wVecSm').value=IMP.vecSm;if(!art||!art.rawCv||!IMP.vec||busy)return;retrace(art);setArt(art,true,p==='w'?()=>gotoStep(2):null)}});
   // zones the outline did not separate: paint them with a brush (any number of strokes), then turn the paint into a zone
   const maskUI=()=>{const B=ed.brush,nm=art&&art.masks?art.masks.length:0,nw=art&&art.walls?art.walls.length:0;$('wBrushBox').hidden=!B.on;$('wBrush').hidden=B.on;
     $('wMaskUndo').disabled=!nm||B.on;$('wMaskClear').disabled=!(nm+nw)||B.on;$('wBrushApply').disabled=!(B.mask&&B.mask.s.some(q=>!q.e));$('wBrushUndo').disabled=!(B.mask&&B.mask.s.length);
