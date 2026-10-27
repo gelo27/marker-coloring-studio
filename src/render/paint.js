@@ -165,29 +165,44 @@ export function paintAt(c){
     colorCtx.drawImage(tmpCv,0,0,r.bw,r.bh,r.bx,r.by,r.bw,r.bh)});
   dynamic=still;colorDirty=true;
 }
-/* wet ink: two slots, each a canvas the size of one region's bbox */
+/* wet ink: two texture slots for the shader. The newest wet zone gets one; every older zone that is still wet shares the
+   other (their joint box, at a lower resolution when it is large). Each zone's sheen fades out at its end, so none of
+   them loses its gloss at once when more zones are wet than there are slots. */
 export const WET_TAU=.9,WET_END=2.8;
 export const wetSlots=[{k:-1},{k:-1}];
+let wetScr=null,wetScrX=null;
+const wetEnd=r=>r.t0+r.dur*r.sf+(TOOLS[r.tool].fluid?TOOLS[r.tool].dry:WET_END);
+/* one zone's sheen at scale sc into wetScr (its box), clipped to the zone */
+function wetZone(r,c,sc){
+  const w=Math.max(1,Math.ceil(r.bw*sc)),h=Math.max(1,Math.ceil(r.bh*sc));
+  if(!wetScr||wetScr.width<w||wetScr.height<h){wetScr=mk(Math.max(w,wetScr?wetScr.width:0),Math.max(h,wetScr?wetScr.height:0));wetScrX=wetScr.getContext('2d')}
+  const ctx=wetScrX;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,w,h);ctx.setTransform(sc,0,0,sc,0,0);
+  if(TOOLS[r.tool].fluid&&r.fl){const F=r.fl;ctx.imageSmoothingEnabled=true;ctx.drawImage(F.wc,1,1,F.gw-2,F.gh-2,0,0,(F.gw-2)*F.cs,(F.gh-2)*F.cs)}
+  else{const SD=r.dur*r.sf,p=clamp((c-r.t0)/SD,0,1),cur=p>=1?{k:r.legs.length,f:0}:legAt(r,p);
+    if(cur.k<r.legs.length&&cur.f>0)strokeLeg(ctx,r.legs[cur.k],r,cur.f,'#fff',1.2);
+    for(let i=Math.min(cur.k,r.legs.length)-1;i>=0;i--){const te=r.t0+SD*r.legs[i].f1;const k=Math.exp(-(c-te)/WET_TAU);if(k<.03)break;strokeLeg(ctx,r.legs[i],r,1,'#fff',k*1.2)}}
+  ctx.globalCompositeOperation='destination-in';ctx.drawImage(r.tightCv,0,0);ctx.globalCompositeOperation='source-over';ctx.setTransform(1,0,0,1,0,0);
+  return[w,h]}
 export function wetAt(c){
   const on=S.fx.wet.on&&S.fx.wet.v>0&&!fxOff();
   for(let s=0;s<2;s++){wetSlots[s].active=false}
   if(!on||!plan.order.length){setWetUniforms();return}
-  const o=plan.order;
-  const cand=[];for(let i=Math.max(0,cursor-3);i<=Math.min(o.length-1,cursor-1);i++){const r=o[i],T=TOOLS[r.tool];if(T.wet&&!r.instant&&c>=r.t0&&c<r.t0+r.dur*r.sf+(T.fluid?T.dry:WET_END)&&(!T.fluid||(r.fl&&FLQ.gloss)))cand.push(r)}
-  cand.slice(-2).forEach(r=>{
-    let slot=wetSlots.find(s=>s.k===r.k);
-    if(!slot){slot=wetSlots.find(s=>s.k<0||!cand.some(q=>q.k===s.k))||wetSlots[0];slot.k=r.k;slot.cv=mk(r.bw||1,r.bh||1);slot.ctx=slot.cv.getContext('2d');if(slot.tex)slot.tex.destroy(true);slot.tex=null}
-    regionMask(r);if(slot.cv.width!==r.bw||slot.cv.height!==r.bh){slot.cv.width=r.bw;slot.cv.height=r.bh;if(slot.tex){slot.tex.destroy(true);slot.tex=null}}
-    const ctx=slot.ctx;ctx.clearRect(0,0,r.bw,r.bh);
-    if(TOOLS[r.tool].fluid&&r.fl){const F=r.fl;ctx.imageSmoothingEnabled=true;ctx.drawImage(F.wc,1,1,F.gw-2,F.gh-2,0,0,(F.gw-2)*F.cs,(F.gh-2)*F.cs);ctx.globalCompositeOperation='destination-in';ctx.drawImage(r.tightCv,0,0);ctx.globalCompositeOperation='source-over';
-      if(!slot.tex)slot.tex=PIXI.Texture.from(slot.cv);else slot.tex.baseTexture.update();slot.active=true;slot.rect=[r.bx/seg.W,r.by/seg.H,r.bw/seg.W,r.bh/seg.H];return}
-    const SD=r.dur*r.sf,p=clamp((c-r.t0)/SD,0,1);const cur=p>=1?{k:r.legs.length,f:0}:legAt(r,p);
-    if(cur.k<r.legs.length&&cur.f>0)strokeLeg(ctx,r.legs[cur.k],r,cur.f,'#fff',1.2);
-    for(let i=Math.min(cur.k,r.legs.length)-1;i>=0;i--){const te=r.t0+SD*r.legs[i].f1;const w=Math.exp(-(c-te)/WET_TAU);if(w<.03)break;strokeLeg(ctx,r.legs[i],r,1,'#fff',w*1.2)}
-    ctx.globalCompositeOperation='destination-in';ctx.drawImage(r.tightCv,0,0);ctx.globalCompositeOperation='source-over';
+  // zones still wet; the order is sorted by start, so they are among the last ones started
+  const o=plan.order,cand=[];
+  for(let i=Math.min(o.length,cursor)-1;i>=0&&i>=cursor-40;i--){const r=o[i],T=TOOLS[r.tool];if(T.wet&&!r.instant&&c>=r.t0&&c<wetEnd(r)&&(!T.fluid||(r.fl&&FLQ.gloss)))cand.unshift(r)}
+  const groups=cand.length>2?[cand.slice(0,-1),cand.slice(-1)]:cand.map(r=>[r]);
+  groups.forEach((G,s)=>{
+    G.forEach(r=>regionMask(r));
+    const gx=Math.min(...G.map(r=>r.bx)),gy=Math.min(...G.map(r=>r.by)),gw=Math.max(...G.map(r=>r.bx+r.bw))-gx,gh=Math.max(...G.map(r=>r.by+r.bh))-gy;
+    const sc=Math.min(1,Math.sqrt(9e5/(gw*gh))),cw=Math.max(1,Math.ceil(gw*sc)),ch=Math.max(1,Math.ceil(gh*sc));
+    const slot=wetSlots[s];slot.k=G[G.length-1].k;
+    if(!slot.cv){slot.cv=mk(cw,ch);slot.ctx=slot.cv.getContext('2d')}
+    if(slot.cv.width!==cw||slot.cv.height!==ch){slot.cv.width=cw;slot.cv.height=ch;if(slot.tex){slot.tex.destroy(true);slot.tex=null}}
+    const ctx=slot.ctx;ctx.clearRect(0,0,cw,ch);ctx.globalCompositeOperation='lighter';
+    G.forEach(r=>{const [w,h]=wetZone(r,c,sc);ctx.globalAlpha=smooth(clamp((wetEnd(r)-c)/.8,0,1));ctx.drawImage(wetScr,0,0,w,h,(r.bx-gx)*sc,(r.by-gy)*sc,w,h)});
+    ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
     if(!slot.tex)slot.tex=PIXI.Texture.from(slot.cv);else slot.tex.baseTexture.update();
-    slot.active=true;slot.rect=[r.bx/seg.W,r.by/seg.H,r.bw/seg.W,r.bh/seg.H];
-  });
+    slot.active=true;slot.rect=[gx/seg.W,gy/seg.H,cw/sc/seg.W,ch/sc/seg.H]});
   setWetUniforms();
 }
 export function setWetUniforms(){
