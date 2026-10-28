@@ -50,8 +50,14 @@ export function analyze(art){
   // how much of each region touching the page edge is bare paper in a coloured source: a full-bleed picture fills its
   // sky and ground right up to the edge, while the margin round a framed drawing stays white
   if(art.colored&&art.srcCv){const sd=art.srcCv.getContext('2d').getImageData(0,0,W,H).data,pp=new Int32Array(R+1),pn=new Int32Array(R+1);
-    for(let i=0,j=0;i<N;i+=3,j+=12){const r=lab[i];if(!r)continue;const a=sd[j],b=sd[j+1],c=sd[j+2],mx=Math.max(a,b,c),mn=Math.min(a,b,c);pn[r]++;if(mx>225&&(mx-mn)<.08*mx)pp[r]++}
+    for(let i=0,j=0;i<N;i++,j+=4){const r=lab[i];if(!r)continue;const a=sd[j],b=sd[j+1],c=sd[j+2],mx=Math.max(a,b,c),mn=Math.min(a,b,c);pn[r]++;if(mx>225&&(mx-mn)<.08*mx)pp[r]++}
     regs.forEach(g=>{g.paper=pn[g.i]?pp[g.i]/pn[g.i]:1})}
+  // specks smaller than the smallest zone are not left as white holes in the drawing: they get filled with ink.
+  // Paper-white specks of a coloured source (eye highlights, glints) stay white, and on a black-and-white page so do
+  // the bits at the page edge (crumbs of the margin)
+  if(IMP.inkTiny!==false){const minA=(IMP.minArea||95)*SS*SS,tiny=new Uint8Array(R+1);let any=false;
+    regs.forEach(g=>{if(g.user||g.area>=minA||(art.colored&&g.paper!=null?g.paper>.4:g.edge))return;tiny[g.i]=1;g.ink=true;any=true});
+    if(any){for(let i=0,j=3;i<N;i++,j+=4)if(tiny[lab[i]])ld[j]=255;ltx.putImageData(lt,0,0)}}
   if(art.idCv){
     const K=art.names.length,votes=new Int32Array((R+1)*(K+1));
     const idd=art.idCv.getContext('2d').getImageData(0,0,W,H).data;

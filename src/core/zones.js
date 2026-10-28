@@ -76,17 +76,34 @@ export function autoOrderZones(){
 }
 /* ---- colour groups: zones sharing a colour are painted together, like picking up one marker at a time ---- */
 const lumHex=c=>{const n=hex(c);return(((n>>16)&255)*.3+((n>>8)&255)*.59+(n&255)*.11)/255};
-/* groups in the order they appear in a zone list */
-export function colorGroups(list){const m=new Map();(list||orderedZones()).forEach(z=>{const k=z.color.toLowerCase();if(!m.has(k))m.set(k,{color:z.color,zs:[]});m.get(k).zs.push(z)});return[...m.values()]}
+/* one marker per family of close shades: colours taken from a picture give nearly every zone its own shade (a pumpkin
+   a touch redder than its neighbour), but a hand would colour them all with the same orange. The largest zones set the
+   marker colours; every zone joins the nearest marker within the tolerance */
+const MARKER_TOL=35;
+function markerOf(){const reps=[],m=new Map();
+  zones.slice().sort((a,b)=>b.r.area-a.r.area).forEach(z=>{let b=null,bd=MARKER_TOL;reps.forEach(c=>{const d=colDist(c,z.color);if(d<bd){bd=d;b=c}});if(!b){b=z.color;reps.push(b)}m.set(z,b)});return m}
+/* groups (markers) in the order they appear in a zone list */
+export function colorGroups(list){const mk=markerOf(),m=new Map();(list||orderedZones()).forEach(z=>{const c=mk.get(z)||z.color,k=c.toLowerCase();if(!m.has(k))m.set(k,{color:c,zs:[]});m.get(k).zs.push(z)});return[...m.values()]}
 export const GROUP_RULES={light:'Від світлих до темних',dark:'Від темних до світлих',top:'Зверху вниз',big:'Більші групи спершу',count:'Де більше зон — спершу'};
-/* order by colour groups: groups sorted by a rule, zones inside a group follow a nearest-neighbour path, background last */
+/* order by colour groups, the way a hand works: one marker colours the zones of its colour that lie together, then
+   the next marker is picked up near where the hand is. Every colour is split into local clusters (zones of that colour
+   with small gaps between them); the next cluster is the one closest to the pen, with the rule (light to dark, top
+   down...) as a gentle preference and a small bonus for carrying on with the same marker. Background last. */
 export function groupedOrder(rule){
-  const bg=zones.filter(z=>z.r.isBg),gs=colorGroups(zones.filter(z=>!z.r.isBg));
-  const area=g=>g.zs.reduce((a,z)=>a+z.r.area,0),top=g=>Math.min(...g.zs.map(z=>z.r.cy));
+  const bg=zones.filter(z=>z.r.isBg),gs=colorGroups(zones.filter(z=>!z.r.isBg));if(!gs.length)return nnPath(bg,null).map(z=>z.i);
+  const D=Math.hypot(seg.W,seg.H),T=.07*D,area=g=>g.zs.reduce((a,z)=>a+z.r.area,0),top=g=>Math.min(...g.zs.map(z=>z.r.cy));
   const key={light:g=>-lumHex(g.color),dark:g=>lumHex(g.color),top,big:g=>-area(g),count:g=>-g.zs.length}[rule]||(g=>-lumHex(g.color));
   gs.sort((a,b)=>key(a)-key(b)||top(a)-top(b));
-  const out=[];let cur=null;
-  gs.forEach(g=>{const o=nnPath(g.zs,cur);if(o.length){const l=o[o.length-1].r;cur={x:l.cx,y:l.cy};out.push(...o)}});
+  const gap=(a,b)=>Math.hypot(Math.max(0,a.x0-b.x1,b.x0-a.x1),Math.max(0,a.y0-b.y1,b.y0-a.y1)),units=[];
+  gs.forEach((g,gi)=>{const zs=g.zs,n=zs.length,par=zs.map((_,k)=>k),f=k=>{while(par[k]!==k)k=par[k]=par[par[k]];return k};
+    for(let a=0;a<n;a++)for(let b=a+1;b<n;b++)if(gap(zs[a].r,zs[b].r)<T)par[f(a)]=f(b);
+    const m=new Map();zs.forEach((z,k)=>{const r=f(k);if(!m.has(r))m.set(r,[]);m.get(r).push(z)});
+    m.forEach(l=>units.push({zs:l,col:g.color.toLowerCase(),rank:gs.length>1?gi/(gs.length-1):0}))});
+  const pd=(p,r)=>Math.hypot(Math.max(0,r.x0-p.x,p.x-r.x1),Math.max(0,r.y0-p.y,p.y-r.y1));
+  const out=[];let cur={x:0,y:0},col=null;
+  while(units.length){let bi=0,bc=1e18;
+    units.forEach((u,k)=>{let d=1e18;u.zs.forEach(z=>{d=Math.min(d,pd(cur,z.r))});const c=d/D+.3*u.rank-(u.col===col?.08:0);if(c<bc){bc=c;bi=k}});
+    const u=units.splice(bi,1)[0],o=nnPath(u.zs,cur),l=o[o.length-1].r;cur={x:l.cx,y:l.cy};col=u.col;out.push(...o)}
   return out.concat(nnPath(bg,cur)).map(z=>z.i);
 }
 /* moves whole colour groups (each keeps the order of its zones); `groups` is a list of colours in the new order */

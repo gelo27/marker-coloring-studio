@@ -55,7 +55,7 @@ export const PUFF={ns:7.5,gloss:1};
 export const DESK={mode:'default',tex:null,iw:1,ih:1,scale:1,bright:1,blur:0,tint:'#ccded6'};
 export const FLQ={prev:140,render:320,res:140,mix:2,blooms:true,drops:true,cine:true,gloss:true};
 export const OUT={on:false,dur:6,color:'#e3263b',text:'SUBSCRIBE',style:'hand'},OUTRO_TR=1.0,OUT_FONT='"Permanent Marker","Marker Felt","Comic Sans MS",cursive';
-export const IMP={thr:.38,useColors:true,lineK:.42,minArea:95,vec:true,vecSm:1};
+export const IMP={thr:.38,useColors:true,lineK:.42,minArea:95,inkTiny:true,vec:true,vecSm:1};
 export const SHADE={on:true,when:'zone'};
 /* inking: a black tool first draws the drawing's lines, then the zones are coloured (dur 0 = by the length of the lines) */
 export const INK={on:false,tool:'marker',dur:0};

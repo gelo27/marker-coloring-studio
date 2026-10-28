@@ -144,7 +144,7 @@ export function syncWizard(){
   setSegValue('wFormats',view.fmt);
   if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=durLabel(S.duration);[...$('wToolGrid').children].forEach(b=>b.setAttribute('aria-checked',String(b.dataset.t===S.tool)))}
   else if(n===2){zoneStats();if(WZ.maskUI)WZ.maskUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
-    $('wMinArea').value=IMP.minArea;$('wMinAreaV').textContent=IMP.minArea;setSegValue('wZoneView',ed.view==='final'?'final':'map')}
+    $('wMinArea').value=IMP.minArea;$('wMinAreaV').textContent=IMP.minArea;$('wInkTiny').checked=IMP.inkTiny!==false;setSegValue('wZoneView',ed.view==='final'?'final':'map')}
   else if(n===3){renderWPal();$('wShadeRow').hidden=!(art&&art.colored);$('wShade').checked=SHADE.on;$('wUndo').disabled=!WZ.undo.length}
   else if(n===4){$('wGroupRule').value=$('wGroupRule').value||'light';syncOrderUI()}
   else if(n===5)syncCam();
@@ -178,6 +178,7 @@ export function bindWizard(onPreview){
   $('wZoneView').onclick=e=>{const b=e.target.closest('button');if(!b)return;setSegValue('wZoneView',b.dataset.v);enterEditor(b.dataset.v,null)};
   $('wLineK').oninput=e=>{$('wLineKV').textContent=(+e.target.value).toFixed(2)};
   $('wMinArea').oninput=e=>{$('wMinAreaV').textContent=e.target.value};
+  $('wInkTiny').onchange=e=>{IMP.inkTiny=e.target.checked;if(art&&!busy)setArt(art,true,()=>gotoStep(2))};
   $('wReseg').onclick=()=>{if(!art||busy)return;const v=+$('wLineK').value;IMP.minArea=+$('wMinArea').value;
     if(art.colored){IMP.thr=v;$('impThr').value=v;$('impThrV').textContent=v.toFixed(2);art.lineCv=extractLines(art.srcCv,IMP.thr)}else{IMP.lineK=v;if(IMP.vec)retrace(art)}
     setArt(art,true,()=>gotoStep(2))};
