@@ -9,12 +9,19 @@ export const DEFAULT_PALETTES=[
 ];
 export let art,seg,zones=[],zoneByI=new Map(),palette=[],palSeed=1;
 export function pageArea(){return seg.W*seg.H}
+/* the paper round the drawing is not a zone. A region touching the page edge is that margin when it is bare paper in a
+   coloured source, or, on a black-and-white page, when it runs along most of the edge (a framed drawing); the sky, ground
+   and objects of a full-bleed picture also reach the edge, but only along part of it */
+export function isMargin(r){
+  if(!r.edge)return r.area>=pageArea()*.6;
+  if(art.colored&&r.paper!=null)return r.paper>.5;
+  return r.bord>.6||r.area>=pageArea()*.6}
 export function initZones(){
   const minArea=(IMP.minArea||95)*SS*SS,rnd=rngOf(4242);
   // zones painted by hand are always kept, whatever their size or position
   let regs=seg.regs.filter(r=>r.user?r.area>=16:r.area>=minArea);
   if(art.demo)regs=regs.filter(r=>r.user||(r.id&&DEMO_COLORS[r.id]));
-  else regs=regs.filter(r=>r.user||(!r.edge&&r.area<pageArea()*.6));
+  else regs=regs.filter(r=>r.user||!isMargin(r));
   zones=[];zoneByI=new Map();
   const big=art.demo?null:regs.slice().sort((a,b)=>b.area-a.area)[0];
   regs.forEach((r,k)=>{

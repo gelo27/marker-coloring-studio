@@ -35,18 +35,23 @@ export function analyze(art){
   for(let s=0;s<N;s++){
     if(isLine[s]||lab[s])continue;
     R++;let sp=0;stack[sp++]=s;lab[s]=R;
-    let cnt=0,x0=W,y0=H,x1=0,y1=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,edge=false;
+    let cnt=0,x0=W,y0=H,x1=0,y1=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,edge=false,bord=0;
     while(sp){const p=stack[--sp];const x=p%W,y=(p-x)/W;cnt++;
       if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
-      if(x===0||y===0||x===W-1||y===H-1)edge=true;
+      if(x===0||y===0||x===W-1||y===H-1){edge=true;bord++}
       if(x>0){const q=p-1;if(!lab[q]&&!isLine[q]){lab[q]=R;stack[sp++]=q}}
       if(x<W-1){const q=p+1;if(!lab[q]&&!isLine[q]){lab[q]=R;stack[sp++]=q}}
       if(y>0){const q=p-W;if(!lab[q]&&!isLine[q]){lab[q]=R;stack[sp++]=q}}
       if(y<H-1){const q=p+W;if(!lab[q]&&!isLine[q]){lab[q]=R;stack[sp++]=q}}
     }
     const cx=sx/cnt,cy=sy/cnt,vxx=sxx/cnt-cx*cx,vyy=syy/cnt-cy*cy,vxy=sxy/cnt-cx*cy;
-    regs.push({i:R,lk:-1,user:!!um[s],area:cnt,x0,y0,x1,y1,cx,cy,edge,ang:.5*Math.atan2(2*vxy,vxx-vyy),elong:Math.sqrt(Math.pow(vxx-vyy,2)+4*vxy*vxy)/(vxx+vyy+1e-6)});
+    regs.push({i:R,lk:-1,user:!!um[s],area:cnt,x0,y0,x1,y1,cx,cy,edge,bord:bord/(2*(W+H)-4),ang:.5*Math.atan2(2*vxy,vxx-vyy),elong:Math.sqrt(Math.pow(vxx-vyy,2)+4*vxy*vxy)/(vxx+vyy+1e-6)});
   }
+  // how much of each region touching the page edge is bare paper in a coloured source: a full-bleed picture fills its
+  // sky and ground right up to the edge, while the margin round a framed drawing stays white
+  if(art.colored&&art.srcCv){const sd=art.srcCv.getContext('2d').getImageData(0,0,W,H).data,pp=new Int32Array(R+1),pn=new Int32Array(R+1);
+    for(let i=0,j=0;i<N;i+=3,j+=12){const r=lab[i];if(!r)continue;const a=sd[j],b=sd[j+1],c=sd[j+2],mx=Math.max(a,b,c),mn=Math.min(a,b,c);pn[r]++;if(mx>225&&(mx-mn)<.08*mx)pp[r]++}
+    regs.forEach(g=>{g.paper=pn[g.i]?pp[g.i]/pn[g.i]:1})}
   if(art.idCv){
     const K=art.names.length,votes=new Int32Array((R+1)*(K+1));
     const idd=art.idCv.getContext('2d').getImageData(0,0,W,H).data;
@@ -58,7 +63,7 @@ export function analyze(art){
     for(let i=0;i<N;i++){const k=um[i],l=lab[i];if(!k||!l||into[l])continue;into[l]=-k}
     const first=new Map();for(let l=1;l<=R;l++){if(into[l]>=0){into[l]=0;continue}const k=-into[l];if(!first.has(k)){first.set(k,l);into[l]=0}else into[l]=first.get(k)}
     let any=false;for(let l=1;l<=R;l++)if(into[l]){any=true;const a=byI.get(into[l]),b=byI.get(l),n=a.area+b.area;
-      a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;b.gone=true}
+      a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;a.bord=(a.bord||0)+(b.bord||0);b.gone=true}
     if(any){for(let i=0;i<N;i++){const l=lab[i];if(l&&into[l])lab[i]=into[l]}regs=regs.filter(g=>!g.gone)}
     first.forEach(l=>{const g=byI.get(l);if(g)g.user=true})}
   // zones merged by hand (Shift-select + «Об'єднати»): every group holds one point inside each of its zones; the zones
@@ -67,7 +72,7 @@ export function analyze(art){
     for(const grp of art.merges){const ls=[...new Set(grp.map(p=>{const x=Math.round(p[0]),y=Math.round(p[1]);return x>=0&&y>=0&&x<W&&y<H?lab[y*W+x]:0}).filter(Boolean).map(root))];if(ls.length<2)continue;
       const a=byI.get(ls[0]);if(!a)continue;
       for(const l of ls.slice(1)){const b=byI.get(l);if(!b||b.gone)continue;const n=a.area+b.area;
-        a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;a.user=a.user||b.user;
+        a.cx=(a.cx*a.area+b.cx*b.area)/n;a.cy=(a.cy*a.area+b.cy*b.area)/n;a.area=n;a.x0=Math.min(a.x0,b.x0);a.y0=Math.min(a.y0,b.y0);a.x1=Math.max(a.x1,b.x1);a.y1=Math.max(a.y1,b.y1);a.edge=a.edge||b.edge;a.bord=(a.bord||0)+(b.bord||0);a.user=a.user||b.user;
         b.gone=true;into[l]=ls[0];any=true}}
     if(any){for(let i=0;i<N;i++){const l=lab[i];if(l&&into[l])lab[i]=root(l)}regs=regs.filter(g=>!g.gone)}}
   return {W,H,lab,isLine,lineTexCv,regs,rank:new Int8Array(N)};
