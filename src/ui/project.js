@@ -103,6 +103,9 @@ export async function lsRead(){let d=null,p=null;try{d=await idbDo('readonly',st
   try{const t=localStorage.getItem(LS_KEY+'.pending');p=t?JSON.parse(t):null}catch(e){}
   if(!p||(d&&d.saved>=p.saved))return d;if(!d)return p.art&&(p.art.demo||p.art.src)?p:null;
   if(d.art&&!p.art.demo){p.art.src=d.art.src;p.art.ref=d.art.ref}if(p.desk&&d.desk&&!p.desk.img)p.desk.img=d.desk.img;if(!p.pattern)p.pattern=d.pattern;return p}
+/* the background music file is kept apart from the project (too big for the .json), under its own key */
+export async function musicStore(rec){try{await idbDo('readwrite',st=>rec?st.put(rec,LS_KEY+'.music'):st.delete(LS_KEY+'.music'))}catch(e){}}
+export async function musicRead(){try{return await idbDo('readonly',st=>st.get(LS_KEY+'.music'))}catch(e){return null}}
 export async function lsClearAll(){try{await idbDo('readwrite',st=>st.delete(LS_KEY))}catch(e){}try{localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_KEY+'.pending')}catch(e){}}
 export function lsArm(){lsArmed=true}
 export async function lsSave(){

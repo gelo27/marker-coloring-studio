@@ -9,7 +9,24 @@ import {GL} from '../render/glitter.js';
 import {outroSnd} from '../render/outro.js';
 import {busy,setBusy} from '../ui/playback.js';
 export const SND={on:true,vol:.8,strokes:1,events:.8,room:.4,reverb:.35,tools:{},data:null,key:'',ctx:null,gain:null,src:null,buf:null,bufKey:'',startCtx:0,startT:0};
-export function sndKey(){return planVer+'|'+S.tool+'|'+[SND.strokes,SND.events,SND.room,SND.reverb,OUT.on,OUT.dur,OUT.text,OUT.style,FLQ.drops].join(',')+'|'+JSON.stringify(SND.tools||{})+'|'+JSON.stringify(ADD)}
+/* background music: the user's own track, looped under the whole video and faded out at the end */
+export const MUS={L:null,R:null,N:0,name:'',vol:.5,ver:0,blob:null};
+export async function loadMusic(blob,name){
+  const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC)throw new Error('no audio');
+  const b=await new OAC(2,1,SR).decodeAudioData(await blob.arrayBuffer());if(!b.length)throw new Error('empty');
+  MUS.L=b.getChannelData(0).slice();MUS.R=(b.numberOfChannels>1?b.getChannelData(1):b.getChannelData(0)).slice();MUS.N=b.length;MUS.name=name||'';MUS.blob=blob;MUS.ver++}
+export function clearMusic(){MUS.L=MUS.R=MUS.blob=null;MUS.N=0;MUS.name='';MUS.ver++}
+const musKey=()=>MUS.N&&MUS.vol>0?'|m'+MUS.ver+','+MUS.vol:'';
+/* the track repeats with a short equal-power crossfade at the seam so the loop does not click */
+function mixMusic(A){
+  if(!musKey())return A;const N=A.N,M=MUS.N,L=new Float32Array(N),R=new Float32Array(N),xf=Math.min(Math.round(.08*SR),M>>2),P=M-xf,g=MUS.vol,
+    fi=Math.round(.02*SR),fo=Math.min(Math.round(2*SR),N>>1),lim=x=>{const a=Math.abs(x);return a<.9?x:Math.sign(x)*(.9+.1*Math.tanh((a-.9)/.1))};
+  for(let n=0;n<N;n++){let l,r;if(n<P){l=MUS.L[n];r=MUS.R[n]}else{const q=(n-P)%P;if(q<xf){const u=q/xf,a=Math.sin(u*Math.PI/2),b=Math.cos(u*Math.PI/2);l=MUS.L[q]*a+MUS.L[P+q]*b;r=MUS.R[q]*a+MUS.R[P+q]*b}else{l=MUS.L[q];r=MUS.R[q]}}
+    const e=g*Math.min(1,n/fi,(N-1-n)/fo);L[n]=lim(A.L[n]+l*e);R[n]=lim(A.R[n]+r*e)}
+  return{L,R,N};
+}
+export function sndKey(){return baseKey()+musKey()}
+function baseKey(){return planVer+'|'+S.tool+'|'+[SND.strokes,SND.events,SND.room,SND.reverb,OUT.on,OUT.dur,OUT.text,OUT.style,FLQ.drops].join(',')+'|'+JSON.stringify(SND.tools||{})+'|'+JSON.stringify(ADD)}
 export async function genAudio(p,onProg){
   seedNoise((12345+S.seed*7919)|0||1);
   const rnd=rngOf(777+S.seed),RCS={},getRC=t=>{if(!RCS[t]){const R=SND_TOOLS[t]||SND_TOOLS.marker;RCS[t]={R,P:toolSnd(t),st:R.init(rnd),kA:1-Math.exp(-1/(SR*R.att)),kR:1-Math.exp(-1/(SR*R.rel))}}return RCS[t]};
@@ -118,7 +135,8 @@ export async function ensureAudio(silent){
   if(!SND.on||!plan)return null;const k=sndKey();if(SND.data&&SND.key===k)return SND.data;
   if(sndGen&&sndGen.k===k)return sndGen.p;
   const wasBusy=busy;if(!silent){setBusy(true);$('overlay').hidden=false;$('overlay').textContent='Генерую звук…'}
-  const pr=genAudio(plan,silent?null:f=>{$('overlay').textContent='Генерую звук… '+Math.round(f*100)+'%'}).then(d=>{SND.data=d;SND.key=k;sndGen=null;return d});
+  const bk=baseKey(),base=SND.base&&SND.baseKey===bk?Promise.resolve(SND.base):genAudio(plan,silent?null:f=>{$('overlay').textContent='Генерую звук… '+Math.round(f*100)+'%'}).then(d=>{SND.base=d;SND.baseKey=bk;return d});
+  const pr=base.then(b=>{const d=mixMusic(b);SND.data=d;SND.key=k;sndGen=null;return d});
   sndGen={k,p:pr};const d=await pr;if(!silent){$('overlay').hidden=true;setBusy(wasBusy)}return d;
 }
 export function audioCtx(){if(!SND.ctx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;try{SND.ctx=new AC({sampleRate:SR})}catch(e){SND.ctx=new AC()}SND.gain=SND.ctx.createGain();SND.gain.connect(SND.ctx.destination)}SND.gain.gain.value=SND.vol;return SND.ctx}

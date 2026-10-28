@@ -1,12 +1,12 @@
-import {SND,stopAudio} from '../audio/audio.js';
-import {SND_META,toolSnd} from '../audio/synth.js';
+import {MUS,SND,clearMusic,loadMusic,stopAudio} from '../audio/audio.js';
+import {SND_META,SR,toolSnd} from '../audio/synth.js';
 import {plan} from '../core/plan.js';
 import {S,TOOLS} from '../core/settings.js';
 import {$} from '../core/utils.js';
 import {zones} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
 import {busy,playing,seek,setMode,setPlayIcon,setPlaying,togglePlay} from './playback.js';
-import {lsSchedule} from './project.js';
+import {lsSchedule,musicRead,musicStore} from './project.js';
 /* ================= SOUND SETTINGS =================
    The general mix (on/off, volume, strokes, events, room, reverb) and a panel per tool: its own volume and pitch and
    each part of its sound separately (paper rustle, crackle, resonance/"bubbling", squeaks, caps and clicks, tip taps).
@@ -39,6 +39,25 @@ function renderInto(el){
   const h=document.createElement('p');h.className='hint';h.textContent=used.includes(t)?'Налаштування діють для всіх зон, які малює «'+TOOLS[t].name+'». 0% — вимкнути цю складову звуку.':'Цим інструментом зараз нічого не малюється; налаштування знадобляться, коли ви його виберете.';el.appendChild(h);
 }
 export function renderSoundTools(){renderInto($('sndToolsW'));renderInto($('sndToolsA'))}
+/* ================= BACKGROUND MUSIC =================
+   The user's own track plays in a loop under the whole video (preview and export), mixed with the ASMR sound
+   and faded out over the last two seconds. It is remembered in the browser apart from the project file. */
+const musInfo=()=>MUS.N?'«'+MUS.name+'» · '+Math.floor(MUS.N/SR/60)+':'+String(Math.round(MUS.N/SR)%60).padStart(2,'0')+(MUS.N/SR<60?' · повторюється по колу':''):'Музику не вибрано.';
+let musMsg='';
+function musChanged(){musicStore(MUS.blob?{blob:MUS.blob,name:MUS.name,vol:MUS.vol}:null);if(playing){setPlaying(false);stopAudio();setPlayIcon()}renderMusic()}
+async function pickMusic(f){if(!f||busy)return;musMsg='Відкриваю «'+f.name+'»…';renderMusic();
+  try{await loadMusic(f,f.name);musMsg=''}catch(e){musMsg='Не вдалося прочитати «'+f.name+'»: браузер не знає цей аудіоформат. Спробуйте MP3, WAV, M4A або OGG.'}musChanged()}
+function renderMusicInto(el){
+  if(!el)return;el.innerHTML='';
+  const b=document.createElement('div');b.className='btns';
+  const lb=document.createElement('label');lb.className='btn small';lb.textContent=MUS.N?'Інша музика…':'Своя музика…';const inp=document.createElement('input');inp.type='file';inp.accept='audio/*';inp.onchange=e=>pickMusic(e.target.files[0]);lb.appendChild(inp);b.appendChild(lb);
+  if(MUS.N){const rm=document.createElement('button');rm.className='btn small';rm.textContent='Прибрати';rm.onclick=()=>{clearMusic();musChanged()};b.appendChild(rm)}
+  el.appendChild(b);
+  if(MUS.N)el.appendChild(row('Гучність музики',0,1,.05,MUS.vol,v=>Math.round(v*100),v=>{MUS.vol=v},()=>musChanged()));
+  const h=document.createElement('p');h.className='hint';h.textContent=musMsg||(musInfo()+(MUS.N?'':' Трек грає по колу на фоні всього відео разом зі звуком інструментів і плавно стихає в кінці. Працює, коли звук увімкнено.'));el.appendChild(h);
+}
+export function renderMusic(){renderMusicInto($('musW'));renderMusicInto($('musA'))}
+export async function restoreMusic(){const r=await musicRead();if(r&&r.blob){try{await loadMusic(r.blob,r.name);if(r.vol!=null)MUS.vol=r.vol}catch(e){}}renderMusic()}
 /* the step's general controls drive the controls of the full settings (one code path for both) */
 export function bindSoundStep(){
   const box=$('wSndMix');if(!box)return;
@@ -46,5 +65,6 @@ export function bindSoundStep(){
   wire('Загальна гучність','sndVol',0,1,.05,v=>Math.round(v*100));wire('Штрихи по паперу','sndStrokes',0,1.5,.05,v=>Math.round(v*100));wire('Ковпачки, клацання, вода','sndEvents',0,1.5,.05,v=>Math.round(v*100));
   wire('Тиша кімнати','sndRoom',0,1,.05,v=>Math.round(v*100));wire('Реверберація','sndRev',0,1,.05,v=>Math.round(v*100));
   $('wSndOn').onchange=e=>{$('sndOn').checked=e.target.checked;$('sndOn').dispatchEvent(new Event('change'))};
+  restoreMusic();
 }
 export function syncSound(){const on=$('wSndOn');if(on)on.checked=SND.on;const box=$('wSndMix');if(box){const ids=['sndVol','sndStrokes','sndEvents','sndRoom','sndRev'];[...box.querySelectorAll('input')].forEach((r,k)=>{r.value=$(ids[k]).value;r.nextElementSibling.textContent=Math.round(r.value*100)})}renderSoundTools()}
