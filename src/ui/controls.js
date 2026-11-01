@@ -30,7 +30,7 @@ export function buildToolUI(){
     b.onclick=()=>{if(busy)return;S.tool=k;[...el.children].forEach(x=>x.setAttribute('aria-pressed',x===b));setToolSprite();rebuild(false)};el.appendChild(b)});
 }
 /* watercolour brush: every slider re-simulates the zones, so it applies on release */
-const WC_UI=[['tuft','Фізичні волосинки'],['body','Тіло мазка (менше — помітніші волосинки)',.25,1,.01],['bend','Прогин волосинок',0,1.2,.01],['splay','Розкид пучка',.4,1.8,.01],
+const WC_UI=[['hold','Сохне лише після зафарбовування всієї зони'],['tuft','Фізичні волосинки'],['body','Тіло мазка (менше — помітніші волосинки)',.25,1,.01],['bend','Прогин волосинок',0,1.2,.01],['splay','Розкид пучка',.4,1.8,.01],
   ['opacity','Насиченість фарби',.4,1.6,.01],['edge','Темна кромка мазка',0,2,.05],['cap','Темніший край біля контуру',0,2,.05],['veins','Світлі прожилки при висиханні',0,1,.05],['level','Рівність заливки',0,.6,.01],
   ['flow','Підтьоки та розводи',0,1.5,.05],['bleed','Розмиття по мокрому',0,.6,.01],['vary','Переливи відтінків',0,1,.05],['gran','Зернистість паперу',0,1.5,.05]];
 export function syncWcUI(){WC_UI.forEach(([k,,mn])=>{const e=$('wc_'+k);if(!e)return;if(mn===undefined)e.checked=WC[k]>0;else{e.value=WC[k];$('wc_'+k+'V').textContent=(+WC[k]).toFixed(2)}})}

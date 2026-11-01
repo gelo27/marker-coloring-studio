@@ -15,7 +15,7 @@ import {ensureTmp,legAt,regionMask,tmpCtx,tmpCv} from './paint.js';
    splays under pressure, swings out and flicks on turns, and runs dry at its own pace (dry-brush streaks at the end).
    It runs with a fixed time step, so a frame looks the same in the preview and in the exported video. */
 const DT=1/60,SIM_PX=4.2e5,DRY_RATE=.2,EDGE_PX=20*SS,STROKE_LEN=11;
-export const WC={opacity:1.05,edge:1,leaf:.7,dep:.45,dry:.35,wet:.5,flow:.55,bleed:.14,gran:.5,warp:.5,cap:.8,edgeEv:1.6,level:.22,S:.42,vary:.4,body:.6,bend:.55,splay:1,tuft:1,veins:.3};
+export const WC={opacity:1.05,edge:1,leaf:.7,dep:.45,dry:.35,wet:.5,flow:.55,bleed:.14,gran:.5,warp:.5,cap:.8,edgeEv:1.6,level:.22,S:.42,vary:.4,body:.6,bend:.55,splay:1,tuft:1,veins:.3,hold:1};
 export const WC_DEF=Object.assign({},WC);
 
 const VS_FULL=`#version 300 es
@@ -272,15 +272,18 @@ function endStroke(F,r){
   gl.disable(gl.SCISSOR_TEST);copyBack(F,rc);clearRT(F.mask);clearRT(F.stroke);
   const q={x0:rc.x,y0:rc.y,x1:rc.x+rc.w,y1:rc.y+rc.h};if(!F.wetBase)F.wetBase=q;else{const b=F.wetBase;b.x0=Math.min(b.x0,q.x0);b.y0=Math.min(b.y0,q.y0);b.x1=Math.max(b.x1,q.x1);b.y1=Math.max(b.y1,q.y1)}
   F.wetPad=Math.max(F.wetPad,8*F.k);F.wetLevel=Math.min(1,F.wetLevel+WC.wet)}
-function flowPass(F,r,P,dst,rc,dt){
+function flowPass(F,r,P,dst,rc,dt,dry){
   const u=P.u;gl.bindFramebuffer(gl.FRAMEBUFFER,dst.fbo);gl.viewport(0,0,F.sw,F.sh);gl.enable(gl.SCISSOR_TEST);gl.scissor(rc.x,rc.y,rc.w,rc.h);gl.useProgram(P.p);
   bindTex([[u.u_dens,F.dens.tex],[u.u_wet,F.wet.tex],[u.u_noise,G.noise],[u.u_zone,F.zone]]);
-  gl.uniform1f(u.u_rate,.12);gl.uniform1f(u.u_dry,DRY_RATE*dt);gl.uniform1f(u.u_frame,F.frame);gl.uniform1f(u.u_flow,.1*WC.flow);gl.uniform1f(u.u_ik,1/F.k);
-  gl.uniform1f(u.u_cap,WC.cap*DRY_RATE*DT*60);gl.uniform1f(u.u_level,WC.level);gl.uniform1f(u.u_veins,WC.veins);gl.uniform1f(u.u_edgeEv,WC.edgeEv);gl.uniform2f(u.u_off,r.bx,r.by);gl.uniform1i(u.u_rad,Math.max(1,Math.round(3*F.k)));full();gl.disable(gl.SCISSOR_TEST)}
+  gl.uniform1f(u.u_rate,.12);gl.uniform1f(u.u_dry,dry*DRY_RATE*dt);gl.uniform1f(u.u_frame,F.frame);gl.uniform1f(u.u_flow,.1*WC.flow);gl.uniform1f(u.u_ik,1/F.k);
+  gl.uniform1f(u.u_cap,dry*WC.cap*DRY_RATE*DT*60);gl.uniform1f(u.u_level,WC.level);gl.uniform1f(u.u_veins,WC.veins);gl.uniform1f(u.u_edgeEv,WC.edgeEv);gl.uniform2f(u.u_off,r.bx,r.by);gl.uniform1i(u.u_rad,Math.max(1,Math.round(3*F.k)));full();gl.disable(gl.SCISSOR_TEST)}
+/* with WC.hold the paint keeps wet while the zone is being painted (the water still moves, nothing evaporates, so
+   every stroke goes on wet-in-wet) and only starts to dry after the last stroke */
 function diffuse(F,r,dt){
   if(!F.wetBase||F.wetLevel<=0)return;const rc=fit(F,F.wetBase,F.wetPad);if(rc.w<=0||rc.h<=0)return;
-  flowPass(F,r,G.P.flowA,F.densB,rc,dt);flowPass(F,r,G.P.flowB,F.wetB,rc,dt);copyBack(F,rc);
-  F.wetPad=Math.min(F.wetPad+2.4*F.k,112*F.k);F.wetLevel-=DRY_RATE*dt;if(F.wetLevel<=0){F.wetLevel=0;F.wetBase=null;F.wetPad=0}}
+  const dry=WC.hold>0&&(F.t<F.tEnd||F.li<r.legs.length)?0:1;
+  flowPass(F,r,G.P.flowA,F.densB,rc,dt,dry);flowPass(F,r,G.P.flowB,F.wetB,rc,dt,dry);copyBack(F,rc);
+  F.wetPad=Math.min(F.wetPad+2.4*F.k,112*F.k);F.wetLevel-=dry*DRY_RATE*dt;if(F.wetLevel<=0){F.wetLevel=0;F.wetBase=null;F.wetPad=0}}
 /* one fixed step: the brush moves on to where it is at time t, then the water moves */
 function step(F,r,t,SD){
   F.t=t;F.frame++;const L=r.legs,p=clamp((t-r.t0)/SD,0,1),cur=p>=1?{k:L.length,f:2}:legAt(r,p);
@@ -306,7 +309,7 @@ export function wcLayer(r,c){
   // seeking: a zone that had dried by then is taken from the cache (stored with how long after its last stroke it dried)
   if(hit&&c>=tEnd+hit.after){ensureTmp(r.bw,r.bh);tmpCtx.clearRect(0,0,r.bw,r.bh);tmpCtx.drawImage(hit.cv,0,0);wcFree(r);return true}
   if(r.wg&&(r.wg.key!==key||r.wg.t>c+1e-6))wcFree(r);
-  if(!r.wg)r.wg=wcInit(r);const F=r.wg;
+  if(!r.wg)r.wg=wcInit(r);const F=r.wg;F.tEnd=tEnd;
   let guard=0;while(F.t+DT<=c&&guard++<9000){step(F,r,F.t+DT,SD);if(F.t>=tEnd&&F.li>=r.legs.length&&!F.wetBase)break}
   show(F,r);
   const done=F.li>=r.legs.length&&!F.st&&(!F.wetBase||c>tEnd+12);
