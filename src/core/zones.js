@@ -1,4 +1,4 @@
-import {IMP,SHADE} from './settings.js';
+import {IMP,S,SHADE} from './settings.js';
 import {SS,clamp,colDist,hex,hex2hsl,hsl2hex,lighten,mk,rgbHex,rngOf} from './utils.js';
 import {DEMO_COLORS,DEMO_GROUP,DEMO_ORDER,DEMO_ZOOM} from '../data/demoArt.js';
 import {regionMask} from '../render/paint.js';
@@ -47,7 +47,7 @@ export function liqShades(c,i){const[h,s,l]=hex2hsl(c),sg=(i*7919%2)?1:-1;
 export const zClose=z=>z.close==='auto'?z.aClose:z.close==='on';
 export const zZoom=z=>z.zoom!=null?z.zoom:z.aZoom;
 export const zFast=z=>z.speed==='auto'?z.aFast:z.speed==='fast';
-export const zCut=z=>z.speed==='cut';
+export const zCut=z=>z.speed==='cut'&&!S.noCuts;  // without cuts such a zone is simply painted
 export let customOrder=null,orderMode='auto';
 export function presetOrder(kind){
   if(kind==='groups')return groupedOrder('light');

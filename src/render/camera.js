@@ -49,7 +49,7 @@ export function shotIndex(c){const s=plan.shots;let k=0;for(let i=0;i<s.length;i
 export function clampCenter(x,y,z){const s=viewFit()*z;const hw=view.W/s/2,hh=view.H/s/2;const pad=seg.W*.05;const minx=-pad+hw,maxx=seg.W+pad-hw,miny=-pad+hh,maxy=seg.H+pad-hh;
   return[minx>maxx?seg.W/2:clamp(x,minx,maxx),miny>maxy?seg.H/2:clamp(y,miny,maxy)]}
 export function camTarget(sh){const tx=sh.cx+(cam.ax-sh.cx)*sh.follow,ty=sh.cy+(cam.ay-sh.cy)*sh.follow;return clampCenter(tx,ty,sh.z)}
-export function camInit(){cam.fax=null;cam.fay=null;cam.fy=.5;cam.fyv=0;cam.phase=0;cam.rv=null;cam.rz=null;cam.shot=-1;cam.nib=false;cam.whip=null;cam.lastCut=-9;camStep(0,0)}
+export function camInit(){cam.sx=cam.sy=cam.sz=0;cam.fb=null;cam.fax=null;cam.fay=null;cam.fy=.5;cam.fyv=0;cam.phase=0;cam.rv=null;cam.rz=null;cam.shot=-1;cam.nib=false;cam.whip=null;cam.lastCut=-9;camStep(0,0)}
 /* tilt-shift focus: follows a slow average of where the tool works, through a critically damped spring,
    so it settles calmly instead of jumping with every stroke; on a cut it lands with a short rack-focus */
 export function camFocus(c,dt,snap){const W=seg.W,H=seg.H,pr=S.human?paperRot(c):0,cs=Math.cos(pr),sn=Math.sin(pr),Y=(x,y)=>H/2+(x-W/2)*sn+(y-H/2)*cs;
@@ -68,33 +68,39 @@ export function nibTarget(st,c){const pr=S.human?paperRot(c):0,cx=seg.W/2,cy=seg
   const half=(TOOL_LEN[st.tool||S.tool]||560)*SS*.5,z=clamp(d/half/viewFit(),1.2,6),f=viewFit()*z;
   const dx=wx-(NIB.ax-.5)*view.W/f-cx,dy=wy-(NIB.ay-.5)*view.H/f-cy;
   return[cx+dx*cs+dy*sn,cy-dx*sn+dy*cs,z]}
+/* without cuts the camera moves on critically damped springs: it eases into every move and out of it, never jerks */
+function spring(k,T,w,dt){const q='s'+k;let u=cam[q]||0;u+=(w*w*(T-cam[k])-2*w*u)*dt;cam[k]+=u*dt;cam[q]=u}
 export function camStep(v,dt){
   const c=plan.cOf(v),st=penState(c),k=shotIndex(c),sh=plan.shots[k];
   const px=cam.x,py=cam.y;
-  if(sh.fly){let fresh=false;if(k!==cam.shot){const was=cam.shot;cam.shot=k;fresh=true;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.leak=!!sh.leak;cam.leakPos=sh.leakPos;cam.leakHue=sh.leakHue;cam.whip=null}
-    const u=clamp((c-sh.ts)/sh.dur,0,1),e=u*.7+.3*smooth(u),p=flyPose(sh,e);cam.x=p[0];cam.y=p[1];cam.z=p[2];cam.ax=cam.x;cam.ay=cam.y;
+  if(sh.fly){let fresh=false;if(k!==cam.shot){const was=cam.shot;cam.shot=k;cam.whip=null;
+      // without cuts the fly-over starts from wherever the camera is and eases onto its path
+      if(S.noCuts&&was>=0&&dt>0)cam.fb={v,x:cam.x,y:cam.y,z:cam.z};else{fresh=true;cam.fb=null;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.leak=!!sh.leak;cam.leakPos=sh.leakPos;cam.leakHue=sh.leakHue}}
+    const u=clamp((c-sh.ts)/sh.dur,0,1),e=u*.7+.3*smooth(u),p=flyPose(sh,e);cam.x=p[0];cam.y=p[1];cam.z=p[2];
+    if(cam.fb){const b=smooth(clamp((v-cam.fb.v)/1.2,0,1));cam.x=lerp(cam.fb.x,p[0],b);cam.y=lerp(cam.fb.y,p[1],b);cam.z=lerp(cam.fb.z,p[2],b);if(b>=1)cam.fb=null}cam.ax=cam.x;cam.ay=cam.y;
     if(fresh||dt<=0){cam.vx=0;cam.vy=0}else{cam.vx=(cam.x-px)/dt;cam.vy=(cam.y-py)/dt}return}
   const camT=S.camMode==='cat'&&!(plan.ink&&c<plan.ink.c1+.4)?addonFocus(c):null;
-  if((S.camMode==='nib'||S.camMode==='cat')&&!sh.intro&&!sh.outro){const T=camT?pageTarget(camT,c):nibTarget(st,c),was=cam.shot,fresh=!cam.nib||dt<=0||(k!==was&&sh.cutTs!=null)||(camT&&Math.hypot(T[0]-cam.x,T[1]-cam.y)*viewFit()*cam.z>view.W*.2);cam.nib=true;cam.shot=k;cam.ax=st.x;cam.ay=st.y;
+  if((S.camMode==='nib'||S.camMode==='cat')&&!sh.intro&&!sh.outro){const T=camT?pageTarget(camT,c):nibTarget(st,c),was=cam.shot,fresh=S.noCuts?dt<=0||was<0:!cam.nib||dt<=0||(k!==was&&sh.cutTs!=null)||(camT&&Math.hypot(T[0]-cam.x,T[1]-cam.y)*viewFit()*cam.z>view.W*.2);cam.nib=true;cam.shot=k;cam.ax=st.x;cam.ay=st.y;
     // focus: the nib camera focuses the tip; the cat camera the cat it films (the frame centre), not the tool below it
     const FX=camT?camT[0]:st.x,FY=camT?camT[1]:st.y;
-    if(fresh){cam.x=T[0];cam.y=T[1];cam.z=T[2];cam.vx=cam.vy=0;cam.whip=null;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.fax=FX;cam.fay=FY;camFocus(c,0,was<0?true:'rack');return}
-    const kp=camT?1:1-Math.exp(-7*dt),kz=camT?1:1-Math.exp(-2.5*dt),kf=1-Math.exp(-4*dt);cam.x+=(T[0]-cam.x)*kp;cam.y+=(T[1]-cam.y)*kp;cam.z+=(T[2]-cam.z)*kz;
+    if(fresh){cam.x=T[0];cam.y=T[1];cam.z=T[2];cam.vx=cam.vy=0;cam.sx=cam.sy=cam.sz=0;cam.whip=null;cam.lastCut=v;cam.lastTrans=was<0?'start':'cut';cam.fax=FX;cam.fay=FY;camFocus(c,0,was<0?true:'rack');return}
+    if(cam.fax==null){cam.fax=FX;cam.fay=FY}
+    const kp=camT&&!S.noCuts?1:1-Math.exp(-(camT?6:7)*dt),kz=camT&&!S.noCuts?1:1-Math.exp(-2.5*dt),kf=1-Math.exp(-4*dt);if(S.noCuts){spring('x',T[0],camT?5:6,dt);spring('y',T[1],camT?5:6,dt);spring('z',T[2],2.2,dt)}else{cam.x+=(T[0]-cam.x)*kp;cam.y+=(T[1]-cam.y)*kp;cam.z+=(T[2]-cam.z)*kz}
     cam.fax+=(FX-cam.fax)*kf;cam.fay+=(FY-cam.fay)*kf;cam.vx=(cam.x-px)/dt;cam.vy=(cam.y-py)/dt;camFocus(c,dt,false);return}
   cam.nib=false;
   if(k!==cam.shot){const was=cam.shot;cam.shot=k;
-    if(sh.trans!=='glide'||was<0){
+    if((sh.trans!=='glide'&&!S.noCuts)||was<0){
       const onP=st.x>=0&&st.y>=0&&st.x<=seg.W&&st.y<=seg.H,ax=onP?st.x:sh.cx,ay=onP?st.y:sh.cy;cam.ax=ax;cam.ay=ay;cam.fax=ax;cam.fay=ay;const t=camTarget(sh);
       if(sh.trans==='whip'&&was>=0&&dt>0){cam.whip={v0:v,fx:cam.x,fy:cam.y,fz:cam.z,dur:.34}}
       else{cam.x=t[0];cam.y=t[1];cam.z=sh.liq?sh.z*1.22:sh.z*(sh.intro?.95:.92);cam.whip=null}
       cam.lastCut=v;cam.lastTrans=was<0?'start':sh.trans;cam.leak=!!sh.leak;cam.leakPos=sh.leakPos||[0,0];cam.leakHue=sh.leakHue||0;
-      cam.vx=0;cam.vy=0;camFocus(c,0,was<0?true:'rack');if(!cam.whip)return}
+      cam.vx=0;cam.vy=0;cam.sx=cam.sy=cam.sz=0;camFocus(c,0,was<0?true:'rack');if(!cam.whip)return}
   }
   const ka=1-Math.exp(-1.7*dt);cam.ax+=(st.x-cam.ax)*ka;cam.ay+=(st.y-cam.ay)*ka;
   if(cam.fax==null){cam.fax=st.x;cam.fay=st.y}const kf=1-Math.exp(-1.6*dt);cam.fax+=(st.x-cam.fax)*kf;cam.fay+=(st.y-cam.fay)*kf;
   const t=camTarget(sh);
   if(cam.whip){const w=cam.whip,u=clamp((v-w.v0)/w.dur,0,1),e=ease3(u);cam.x=lerp(w.fx,t[0],e);cam.y=lerp(w.fy,t[1],e);cam.z=lerp(w.fz,sh.z*.96,e);if(u>=1)cam.whip=null}
-  else{const kp=1-Math.exp(-sh.rate*dt),zt=sh.liq?sh.z*(1.22-.3*smooth(clamp((c-sh.liq.t0)/(sh.liq.t1-sh.liq.t0+.8),0,1))):sh.z,kz=1-Math.exp(-(sh.liq?.9:sh.zrate)*dt);cam.x+=(t[0]-cam.x)*kp;cam.y+=(t[1]-cam.y)*kp;cam.z+=(zt-cam.z)*kz}
+  else{const kp=1-Math.exp(-sh.rate*dt),zt=sh.liq?sh.z*(1.22-.3*smooth(clamp((c-sh.liq.t0)/(sh.liq.t1-sh.liq.t0+.8),0,1))):sh.z,kz=1-Math.exp(-(sh.liq?.9:sh.zrate)*dt);if(S.noCuts){const w=Math.max(1.4,sh.rate*1.5);spring('x',t[0],w,dt);spring('y',t[1],w,dt);spring('z',zt,Math.max(1.2,(sh.liq?.9:sh.zrate)*1.3),dt)}else{cam.x+=(t[0]-cam.x)*kp;cam.y+=(t[1]-cam.y)*kp;cam.z+=(zt-cam.z)*kz}}
   if(dt>0){const nvx=(cam.x-px)/dt,nvy=(cam.y-py)/dt;cam.vx=nvx;cam.vy=nvy}
   camFocus(c,dt,false);
 }

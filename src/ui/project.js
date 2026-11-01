@@ -33,7 +33,7 @@ export function projectData(img){
   const pick=(o,ks)=>{const r={};ks.forEach(k=>r[k]=o[k]);return r};
   return{app:'marker-coloring-studio',v:1,saved:new Date().toISOString(),
     art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null,masks:art.masks&&art.masks.length?art.masks:null,merges:art.merges&&art.merges.length?art.merges:null}),
-    INK:Object.assign({},INK),S:{camMode:S.camMode,tool:S.tool,duration:S.duration,montage:S.montage,wideBig:S.wideBig,introWide:S.introWide!==false,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
+    INK:Object.assign({},INK),S:{camMode:S.camMode,noCuts:!!S.noCuts,tool:S.tool,duration:S.duration,montage:S.montage,wideBig:S.wideBig,introWide:S.introWide!==false,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
     WC:Object.assign({},WC),SNOW:Object.assign({},SNOW),AIR:JSON.parse(JSON.stringify(AIR)),U:Object.assign({},U),PUFF:Object.assign({},PUFF),DUO:Object.assign({},DUO),GLT:Object.assign({},GLT),IMP:Object.assign({},IMP),SHADE:Object.assign({},SHADE),
     SND:Object.assign(pick(SND,['on','vol','strokes','events','room','reverb']),{tools:JSON.parse(JSON.stringify(SND.tools||{}))}),FLY:JSON.parse(JSON.stringify(FLY)),
     desk:Object.assign(pick(DESK,['mode','scale','bright','blur','tint']),{img:img?DESK.src||null:null}),
@@ -47,7 +47,7 @@ export function syncInk(){$('inkOn').checked=$('wInkOn').checked=!!INK.on;$('ink
 export function syncUI(){
   syncInk();
   const setv=(id,v,txt,vid)=>{const e=$(id);if(!e)return;if(e.type==='checkbox')e.checked=!!v;else e.value=v;if(vid)$(vid).textContent=txt};
-  setv('dur',S.duration,durLabel(S.duration),'durV');setv('fastMul',S.fastMul,'×'+(+S.fastMul).toFixed(1),'fastMulV');setv('montage',S.montage);setv('wideBig',S.wideBig!==false);
+  setv('dur',S.duration,durLabel(S.duration),'durV');setv('fastMul',S.fastMul,'×'+(+S.fastMul).toFixed(1),'fastMulV');setv('montage',S.montage);setv('noCuts',!!S.noCuts);setv('wideBig',S.wideBig!==false);
   [...$('styleSeg').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.s==='human')===S.human));$('humBox').setAttribute('aria-disabled',String(!S.human));
   $('humPreset').value=S.humPreset||'custom';HUM_META.forEach(([k])=>{const e=$('hum_'+k);if(e){e.value=S.hum[k];$('humv_'+k).textContent=Math.round(S.hum[k]*100)}});
   setv('humTouch',S.hum.touch!==false);setv('humFill',S.hum.fill||'auto');
@@ -67,7 +67,7 @@ export function syncUI(){
 export async function applyProject(d){
   if(!d||d.app!=='marker-coloring-studio')throw new Error('bad');
   setPlaying(false);stopAudio();setPlayIcon();
-  const s=d.S||{};['camMode','tool','duration','montage','wideBig','introWide','human','humPreset','fastMul','seed'].forEach(k=>{if(s[k]!==undefined)S[k]=s[k]});
+  const s=d.S||{};['camMode','noCuts','tool','duration','montage','wideBig','introWide','human','humPreset','fastMul','seed'].forEach(k=>{if(s[k]!==undefined)S[k]=s[k]});S.noCuts=!!s.noCuts;
   Object.assign(INK,{on:false,tool:'marker',dur:0},d.INK||{});if(s.introWide===undefined)S.introWide=true;
   if(!TOOLS[S.tool])S.tool='marker';
   S.hum=Object.assign({},HUM_DEF,s.hum||{});if(s.fx)Object.keys(s.fx).forEach(k=>{if(S.fx[k])Object.assign(S.fx[k],s.fx[k])});

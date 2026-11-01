@@ -1,6 +1,6 @@
 import {SND,audioCtx,ensureAudio,startAudio,stopAudio} from '../audio/audio.js';
 import {plan,planDirty,replan} from '../core/plan.js';
-import {MOBILE_MQ,PREV,PREV_SCALE,isMobileUI,view} from '../core/settings.js';
+import {MOBILE_MQ,PREV,PREV_SCALE,S,isMobileUI,view} from '../core/settings.js';
 import {$,clamp} from '../core/utils.js';
 import {seg,zoneByI} from '../core/zones.js';
 import {ed,edFit,hideBrush,renderEditor} from '../editor/editor.js';
@@ -42,7 +42,7 @@ export function loop(now){
 }
 export function fmtT(t){const m=Math.floor(t/60),s=t-m*60;return String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0')}
 export function updateUI(){if(!plan)return;$('fill').style.width=(T/plan.total*100)+'%';laneHead();$('time').textContent=fmtT(T)+' / '+fmtT(plan.total)}
-export function drawMarks(){renderFlyList();drawZoneBars();syncWizard();renderSoundTools();const m=$('marks');m.innerHTML='';plan.shots.forEach(s=>{if(s.trans==='glide'||s.intro)return;const i=document.createElement('i');if(s.trans==='whip')i.className='w';i.style.left=(plan.vOf(s.ts)/plan.total*100)+'%';m.appendChild(i)})}
+export function drawMarks(){renderFlyList();drawZoneBars();syncWizard();renderSoundTools();const m=$('marks');m.innerHTML='';plan.shots.forEach(s=>{if(s.trans==='glide'||s.intro||S.noCuts)return;const i=document.createElement('i');if(s.trans==='whip')i.className='w';i.style.left=(plan.vOf(s.ts)/plan.total*100)+'%';m.appendChild(i)})}
 /* a slim colour strip of the zones over the scrub bar (click jumps to a zone) and the zone lane, laid out like a
    mobile video editor: blocks in painting order with number, colour and time, a fixed playhead in the middle and the
    strip sliding under it every frame while playing. Swiping the strip scrubs (the frame is redrawn once it rests),

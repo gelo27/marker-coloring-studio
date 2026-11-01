@@ -40,6 +40,7 @@ export function boot(){
   $('dur').oninput=e=>{$('durV').textContent=durLabel(e.target.value)};$('dur').onchange=e=>{S.duration=+e.target.value;rebuild(false)};
   $('fastMul').oninput=e=>{$('fastMulV').textContent='×'+(+e.target.value).toFixed(1)};$('fastMul').onchange=e=>{S.fastMul=+e.target.value;rebuild(false)};
   $('montage').onchange=e=>{S.montage=e.target.checked;rebuild(true)};
+  $('noCuts').onchange=e=>{S.noCuts=e.target.checked;rebuild(true)};
   $('wideBig').onchange=e=>{S.wideBig=e.target.checked;rebuild(true)};
   // inking the lines first, and the opening wide shot (both mirrored in the wizard)
   $('inkOn').onchange=$('wInkOn').onchange=e=>{if(busy){e.target.checked=INK.on;return}INK.on=e.target.checked;syncInk();rebuild(true)};
