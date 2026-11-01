@@ -8,7 +8,7 @@ import {buildDemo} from '../data/demoArt.js';
 import {drawBrush,ed} from '../editor/editor.js';
 import {ic} from './controls.js';
 import {estimateExport,exportVideo,sizeNote} from './exporter.js';
-import {addToPalette,isMerged,makeSwatch,mergeSel,selZones,setOrder,setSegValue,setSegValue2,unmergeSel,updateInspector,zonesChanged} from './inspector.js';
+import {addToPalette,isMerged,makeSwatch,palShown,mergeSel,selZones,setOrder,setSegValue,setSegValue2,unmergeSel,updateInspector,zonesChanged} from './inspector.js';
 import {resegment,setArt} from './load.js';
 import {busy,setMode} from './playback.js';
 import {applyProject,loadImg,lsArm,readURL} from './project.js';
@@ -99,7 +99,7 @@ function tagTap(z){if(!z)return true;snap([z]);z[WZ.tag.k]=WZ.tag.v;zonesChanged
 /* ---------- rendering of each step ---------- */
 function renderWPal(){const el=$('wPal');el.innerHTML='';
   const add=(c)=>{const b=makeSwatch(c,c==null?WZ.brush==null:WZ.brush!=null&&WZ.brush.toLowerCase()===c.toLowerCase());b.onclick=()=>{WZ.brush=c;if(c)$('wColor').value=c;renderWPal()};el.appendChild(b)};
-  add(null);palette.forEach(add)}
+  add(null);palShown().forEach(p=>add(p.c))}
 function zoneStats(){
   const el=$('wZoneStats'),wl=$('wZoneWarn');el.innerHTML='';wl.innerHTML='';if(!seg)return;
   const A=pageArea(),minA=(IMP.minArea||95)*4,tiny=seg.regs.filter(r=>r.area<minA&&r.area>16&&!r.edge).length;

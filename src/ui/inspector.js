@@ -88,11 +88,19 @@ function palChanged(){setPalUser(true);renderPal('palette',true);renderPal('zPal
 /* a palette swatch; c=null is the "do not paint" swatch (white circle, red cross) */
 export function makeSwatch(c,on){const b=document.createElement('button');b.className='sw'+(c?'':' nop')+(on?' on':'');
   if(c){b.style.background=c;b.title=c;b.setAttribute('aria-label','Колір '+c)}else{b.title='Не замальовувати';b.setAttribute('aria-label','Не замальовувати зону')}return b}
+/* the colours a palette shows: the palette itself, then every other colour the zones are painted with (picked as a
+   custom colour, taken from the original, loaded with a project), so any colour on the page can be picked again.
+   own: it is in the palette (only those can be removed) */
+export function palShown(){const out=[],seen=new Set();
+  palette.forEach(c=>{const k=c.toLowerCase();if(!seen.has(k)){seen.add(k);out.push({c,own:true})}});
+  zones.forEach(z=>{if(z.skip||!z.color)return;const k=z.color.toLowerCase();if(!seen.has(k)){seen.add(k);out.push({c:z.color,own:false})}});
+  return out}
 export function renderPal(id,editable){
   const el=$(id);el.innerHTML='';const cur=selZones()[0];
   const np=makeSwatch(null,!!(cur&&cur.skip));np.onclick=()=>{const sel=selZones();if(sel.length){sel.forEach(z=>z.skip=true);zonesChanged(true)}};el.appendChild(np);
-  palette.forEach((c,k)=>{const b=makeSwatch(c,!!(cur&&!cur.skip&&cur.color.toLowerCase()===c.toLowerCase()));
-    if(editable){const x=document.createElement('span');x.className='x';x.textContent='×';x.title='Прибрати з палітри';x.onclick=e=>{e.stopPropagation();palette.splice(k,1);palChanged();updateInspector()};b.appendChild(x)}
+  palShown().forEach(({c,own})=>{const b=makeSwatch(c,!!(cur&&!cur.skip&&cur.color.toLowerCase()===c.toLowerCase()));
+    if(editable&&own){const x=document.createElement('span');x.className='x';x.textContent='×';x.title='Прибрати з палітри';x.onclick=e=>{e.stopPropagation();const k=palette.indexOf(c);if(k>=0)palette.splice(k,1);palChanged();updateInspector()};b.appendChild(x)}
+    else if(!own)b.title=c+' — колір із зон';
     b.onclick=()=>{const sel=selZones();if(sel.length){sel.forEach(z=>{z.skip=false;setZoneColor(z,c)});zonesChanged(true)}else{$('newColor').value=c}};
     el.appendChild(b)});
 }
