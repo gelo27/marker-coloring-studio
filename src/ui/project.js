@@ -11,9 +11,10 @@ import {ed} from '../editor/editor.js';
 import {renderAt} from '../render/renderer.js';
 import {WC,WC_DEF,wcClearCache} from '../render/watercolor.js';
 import {SNOW,SNOW_DEF} from '../render/snow.js';
+import {AIR,airLoad} from '../render/airParts.js';
 import {PATTERN_SRC,applyFormat,makeProceduralPattern,setPattern,setPatternSrc,setToolSprite,updateDesk} from '../render/scene.js';
 import {renderAddonsUI} from './addons.js';
-import {buildFxUI,syncSnowUI,syncWcUI} from './controls.js';
+import {buildFxUI,syncAirUI,syncSnowUI,syncWcUI} from './controls.js';
 import {renderPal,setSegValue,updateInspector} from './inspector.js';
 import {setArt} from './load.js';
 import {T,busy,playing,rebuild,setPlayIcon,setPlaying} from './playback.js';
@@ -33,7 +34,7 @@ export function projectData(img){
   return{app:'marker-coloring-studio',v:1,saved:new Date().toISOString(),
     art:Object.assign(art.demo?{demo:true}:{src:img?art.srcURL||null:null,ref:img?art.refURL||null:null},{walls:art.walls&&art.walls.length?art.walls:null,masks:art.masks&&art.masks.length?art.masks:null,merges:art.merges&&art.merges.length?art.merges:null}),
     INK:Object.assign({},INK),S:{camMode:S.camMode,tool:S.tool,duration:S.duration,montage:S.montage,wideBig:S.wideBig,introWide:S.introWide!==false,human:S.human,hum:Object.assign({},S.hum),humPreset:S.humPreset,fastMul:S.fastMul,seed:S.seed,fx:JSON.parse(JSON.stringify(S.fx))},
-    WC:Object.assign({},WC),SNOW:Object.assign({},SNOW),U:Object.assign({},U),PUFF:Object.assign({},PUFF),DUO:Object.assign({},DUO),GLT:Object.assign({},GLT),IMP:Object.assign({},IMP),SHADE:Object.assign({},SHADE),
+    WC:Object.assign({},WC),SNOW:Object.assign({},SNOW),AIR:JSON.parse(JSON.stringify(AIR)),U:Object.assign({},U),PUFF:Object.assign({},PUFF),DUO:Object.assign({},DUO),GLT:Object.assign({},GLT),IMP:Object.assign({},IMP),SHADE:Object.assign({},SHADE),
     SND:Object.assign(pick(SND,['on','vol','strokes','events','room','reverb']),{tools:JSON.parse(JSON.stringify(SND.tools||{}))}),FLY:JSON.parse(JSON.stringify(FLY)),
     desk:Object.assign(pick(DESK,['mode','scale','bright','blur','tint']),{img:img?DESK.src||null:null}),
     VS:Object.assign({},VS),ADDONS:addonsState(),FLQ:{prev:FLQ.prev,render:FLQ.render,mix:FLQ.mix,blooms:FLQ.blooms,drops:FLQ.drops,cine:FLQ.cine,gloss:FLQ.gloss},pattern:img?PATTERN_SRC:null,fmt:view.fmt,fps:$('fps').value,res:$('res').value,vfmt:$('vfmt').value,OUT:Object.assign({},OUT),
@@ -58,7 +59,7 @@ export function syncUI(){
   [['sndStrokes','strokes'],['sndEvents','events'],['sndRoom','room'],['sndRev','reverb']].forEach(([id,k])=>setv(id,SND[k],Math.round(SND[k]*100),id+'V'));if(!SND.tools)SND.tools={};syncSound();
   setSegValue('flyMode',FLY.mode);setv('flyDur',FLY.dur,(+FLY.dur).toFixed(1)+' с','flyDurV');setv('flyCount',FLY.count,FLY.count,'flyCountV');setv('flyZoom',FLY.zoomMul,'×'+(+FLY.zoomMul).toFixed(2),'flyZoomV');
   setv('impColors',IMP.useColors);['imp','w'].forEach(p=>{setv(p+'Vec',IMP.vec);setv(p+'VecSm',IMP.vecSm,String(IMP.vecSm),p+'VecSmV')});setv('impThr',IMP.thr,(+IMP.thr).toFixed(2),'impThrV');setv('impShade',SHADE.on);setv('impWhen',SHADE.when);
-  syncWcUI();syncSnowUI();setv('puffRel',PUFF.ns,PUFF.ns,'puffRelV');setv('puffGloss',PUFF.gloss,(+PUFF.gloss).toFixed(2),'puffGlossV');
+  syncWcUI();syncSnowUI();syncAirUI();setv('puffRel',PUFF.ns,PUFF.ns,'puffRelV');setv('puffGloss',PUFF.gloss,(+PUFF.gloss).toFixed(2),'puffGlossV');
   setv('outOn',OUT.on);$('outBox').hidden=!OUT.on;setv('outDur',OUT.dur,(+OUT.dur).toFixed(1).replace('.0','')+' с','outDurV');setv('outText',OUT.text);setv('outColor',OUT.color);setv('outStyle',OUT.style||'hand');setv('vsOn',VS.on);setv('vsDir',VS.dir);setv('vsStyle',VS.style||'solid');setv('vsW',VS.w,(+VS.w).toFixed(2),'vsWV');setv('vsDark',VS.dark,(+VS.dark).toFixed(2),'vsDarkV');$('vsBadge').textContent=VS.on?'увімк.':'вимк.';
   setv('liqPrev',FLQ.prev);setv('liqRender',FLQ.render);setv('liqMix',FLQ.mix);setv('liqDrops',FLQ.drops);setv('liqBlooms',FLQ.blooms);setv('liqCine',FLQ.cine);setv('liqGloss',FLQ.gloss);
   setv('duoShift',Math.round(DUO.shift*180/Math.PI),Math.round(DUO.shift*180/Math.PI)+'°','duoShiftV');setv('gltDens',GLT.dens,Math.round(GLT.dens*100),'gltDensV');
@@ -71,7 +72,7 @@ export async function applyProject(d){
   if(!TOOLS[S.tool])S.tool='marker';
   S.hum=Object.assign({},HUM_DEF,s.hum||{});if(s.fx)Object.keys(s.fx).forEach(k=>{if(S.fx[k])Object.assign(S.fx[k],s.fx[k])});
   [[U,d.U],[PUFF,d.PUFF],[DUO,d.DUO],[GLT,d.GLT],[IMP,d.IMP],[SHADE,d.SHADE],[SND,d.SND]].forEach(([a,b])=>{if(b)Object.assign(a,b)});
-  Object.assign(WC,WC_DEF,d.WC||{});wcClearCache();Object.assign(SNOW,SNOW_DEF,d.SNOW||{});
+  Object.assign(WC,WC_DEF,d.WC||{});wcClearCache();Object.assign(SNOW,SNOW_DEF,d.SNOW||{});airLoad(d.AIR);
   if(d.FLY)Object.assign(FLY,d.FLY);
   if(d.desk){Object.assign(DESK,{mode:d.desk.mode||'default',scale:d.desk.scale||1,bright:d.desk.bright||1,blur:d.desk.blur||0,tint:d.desk.tint||'#ccded6'});
     if(d.desk.img)await setDeskImage(d.desk.img,'',false);else if(!DESK.tex)DESK.mode='default'}

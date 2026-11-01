@@ -8,6 +8,7 @@ import {renderAt} from '../render/renderer.js';
 import {WC,WC_DEF,wcClearCache} from '../render/watercolor.js';
 import {setToolSprite} from '../render/scene.js';
 import {SNOW,SNOW_DEF} from '../render/snow.js';
+import {AIR,airLoad} from '../render/airParts.js';
 import {setSegValue} from './inspector.js';
 import {T,busy,playFresh,playing,rebuild,seek,setMode,setPlaying} from './playback.js';
 /* ================= WIRE UI ================= */
@@ -55,6 +56,26 @@ export function buildSnowUI(onChange){
   $('snowOn').onchange=e=>{SNOW.on=e.target.checked?1:0;syncSnowUI();redraw();onChange()};
   SNOW_UI.forEach(([k])=>{const e=$('snow_'+k);e.oninput=()=>{SNOW[k]=+e.value;$('snow_'+k+'V').textContent=Math.round(SNOW[k]*100);redraw()};e.onchange=onChange});
   $('snowReset').onclick=()=>{Object.assign(SNOW,SNOW_DEF,{on:SNOW.on});syncSnowUI();redraw();onChange()};syncSnowUI()}
+/* airborne particles: a switch and three sliders per kind, wind and focus shared */
+const AIR_KINDS=[['dust','Пилинки в промені світла'],['petals','Пелюстки сакури'],['leaves','Осіннє листя'],['bubbles','Мильні бульбашки'],['fluff','Пушинки кульбаби']];
+const AIR_SL=[['amount','Кількість'],['size','Розмір'],['speed','Швидкість']];
+export function syncAirUI(){if(!$('air_wind'))return;let n=0;
+  ['wind','dof'].forEach(k=>{$('air_'+k).value=AIR[k];$('air_'+k+'V').textContent=Math.round(AIR[k]*100)});
+  AIR_KINDS.forEach(([id])=>{const o=AIR[id];$('air_'+id).checked=!!o.on;n+=o.on?1:0;$('air_'+id+'B').hidden=!o.on;
+    AIR_SL.forEach(([k])=>{$('air_'+id+'_'+k).value=o[k];$('air_'+id+'_'+k+'V').textContent=Math.round(o[k]*100)})});
+  $('airBadge').textContent=n?n+' увімк.':'вимк.'}
+export function buildAirUI(onChange){
+  const box=$('airBox');if(!box)return;
+  const sl=(id,l)=>'<div class="row"><label for="'+id+'">'+l+'</label><span class="val" id="'+id+'V"></span></div><input type="range" id="'+id+'" min="0" max="1" step="0.01">';
+  box.innerHTML=AIR_KINDS.map(([id,l])=>'<label class="switch"><input type="checkbox" id="air_'+id+'"> '+l+'</label><div id="air_'+id+'B">'+AIR_SL.map(([k,kl])=>sl('air_'+id+'_'+k,kl)).join('')+'</div>').join('')
+    +sl('air_wind','Вітер')+sl('air_dof','Розмиття близьких (фокус камери)')
+    +'<div class="btns"><button class="btn small" id="airReset">Скинути частинки</button></div><p class="hint">Частинки літають між камерою та аркушем: ближчі до камери розмиваються. Пелюстки, листя й пушинки лягають на аркуш, бульбашки лопаються на ньому.</p>';
+  const redraw=()=>{if(!playing&&!ed.on&&!busy)renderAt(T)};
+  const range=(e,set)=>{e.oninput=()=>{set(+e.value);$(e.id+'V').textContent=Math.round(+e.value*100);redraw()};e.onchange=onChange};
+  AIR_KINDS.forEach(([id])=>{$('air_'+id).onchange=e=>{AIR[id].on=e.target.checked?1:0;syncAirUI();redraw();onChange()};
+    AIR_SL.forEach(([k])=>range($('air_'+id+'_'+k),x=>{AIR[id][k]=x}))});
+  ['wind','dof'].forEach(k=>range($('air_'+k),x=>{AIR[k]=x}));
+  $('airReset').onclick=()=>{const on=AIR_KINDS.map(([id])=>AIR[id].on);airLoad(null);AIR_KINDS.forEach(([id],i)=>{AIR[id].on=on[i]});syncAirUI();redraw();onChange()};syncAirUI()}
 export function renderFlyList(){
   const el=$('flyList');if(!el||!plan)return;el.innerHTML='';
   $('flyBadge').textContent=FLY.mode==='off'?'вимк.':FLY.segs&&FLY.segs.length?'власні':'авто';

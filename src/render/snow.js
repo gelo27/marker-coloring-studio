@@ -3,6 +3,7 @@ import {viewFit} from '../core/plan.js';
 import {OVS,view} from '../core/settings.js';
 import {TAU,clamp,mk,rngOf,smoothstep2} from '../core/utils.js';
 import {seg} from '../core/zones.js';
+import {pushOf} from './airParts.js';
 import {P2W,cam} from './camera.js';
 /* ================= SNOW =================
    Flakes fall through the air between the lens and the page. Each one lives in a cell of the page and repeats a fall
@@ -81,9 +82,11 @@ export function snowAt(v,world,paperC){
         const cy2=sd+(kl-1)*7919|0,lx=(i+hh(cy2+4))*cell,ly=(j+hh(cy2+5))*cell,p=scr(lx,ly,1),r=base*ss*1.4;
         if(p[0]<-r||p[0]>RW+r||p[1]<-r||p[1]>RH+r)continue;
         const e=age/Tm,szp=base*ss/fit,melt=smoothstep2(.12,.7,e),dry=smoothstep2(.45,1,e),ang=hh(cy2+14)*TAU;
+        // the crystal itself can be swept or blown away by a passing tool; its water stays where it landed
+        const pq=melt<1?pushOf(lx,ly,tl,v,szp*.5):[lx,ly,0],cx2=pq[0],cy3=pq[1];
         const w=take(pools.wet,T.wet);if(w){w.position.set(lx,ly);w.rotation=ang;w.scale.set(szp*(.55+.35*melt)/128,szp*(.5+.3*melt)/128);w.alpha=fade*.22*smoothstep2(0,.3,e)*(1-dry);w.tint=0x18263a}
-        if(melt<1){const r=take(pools.rim,T.cry[(cy2>>>3)&3]);if(r){r.position.set(lx+szp*.03,ly+szp*.05);r.rotation=ang;r.scale.set(szp*(1-.55*melt)*1.1/128);r.alpha=fade*(1-melt)*.55;r.tint=0x4a5a70}}
-        if(melt<1){const s=take(pools.cry,T.cry[(cy2>>>3)&3]);if(s){s.position.set(lx,ly);s.rotation=ang;s.scale.set(szp*(1-.55*melt)/128);s.alpha=fade*(1-melt)*.95;s.tint=0xf6faff}}
+        if(melt<1){const r=take(pools.rim,T.cry[(cy2>>>3)&3]);if(r){r.position.set(cx2+szp*.03,cy3+szp*.05);r.rotation=ang+pq[2];r.scale.set(szp*(1-.55*melt)*1.1/128);r.alpha=fade*(1-melt)*.55;r.tint=0x4a5a70}}
+        if(melt<1){const s=take(pools.cry,T.cry[(cy2>>>3)&3]);if(s){s.position.set(cx2,cy3);s.rotation=ang+pq[2];s.scale.set(szp*(1-.55*melt)/128);s.alpha=fade*(1-melt)*.95;s.tint=0xf6faff}}
         const g=Math.pow(Math.max(0,Math.cos(camT*1.3+hh(cy2+15)*TAU+v*.6)),24)*SNOW.glint;
         const d=take(pools.drop,T.drop);if(d){d.position.set(lx-szp*.12,ly-szp*.14);d.rotation=0;d.scale.set(szp*(.18+.25*g)/128);d.alpha=fade*(.25+.75*g)*smoothstep2(.2,.5,e)*(1-dry)*.9;d.tint=0xffffff}}}}
   [...Object.values(air),...Object.values(pools)].forEach(finish);
