@@ -91,7 +91,7 @@ function setup(paperC){textures();const ADD=PIXI.BLEND_MODES.ADD;
   if(!C){C=new PIXI.Container();L={beam:pool(C,ADD),rim:pool(C,0),sharp:pool(C,0),bok:pool(C,0),add:pool(C,ADD)}}
   if(!landC||landC.parent!==paperC){if(landC){if(landC.parent)landC.parent.removeChild(landC);landC.destroy({children:true})}landC=new PIXI.Container();paperC.addChild(landC);
     G={mark:pool(landC,0),shadow:pool(landC,0),rim:pool(landC,0),lie:pool(landC,0),add:pool(landC,ADD)}}}
-export const airC=()=>C;
+export const airC=()=>C,airLand=()=>landC;
 /* the page-space box under the frame, padded by m: only cells in it can show (anything higher in the air is projected
    farther out, so the footprint on the page bounds it). The page and the world may be turned a little. */
 const VB=[0,0,0,0];

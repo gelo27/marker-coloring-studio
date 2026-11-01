@@ -10,8 +10,8 @@ import {GL,updateParts} from './glitter.js';
 import {OC,outroAt} from './outro.js';
 import {flushPaint,paintAt,wetAt} from './paint.js';
 import {app,jarC,jarTint,liqDropAt,markHeightDirty,paperC,paperShader,penC,penShadow,penTint,post,postShader,renderHeight,sceneRT,useSprite,world} from './scene.js';
-import {airAt,airC,pushSweep} from './airParts.js';
-import {snowAt,snowC} from './snow.js';
+import {airAt,airC,airLand,pushSweep} from './airParts.js';
+import {snowAt,snowC,snowLand} from './snow.js';
 import {shadowHover} from './toolSprites.js';
 /* ================= RENDER ================= */
 export const fxv=k=>S.fx[k].on&&!fxOff()?S.fx[k].v:0;
@@ -98,4 +98,7 @@ export function penBlur(c,v,st,pw,fit){const k=fxv('penblur');if(!penC)return;
   if(!penC.filters||penC.filters[0]!==penMB)penC.filters=[penMB];
   let dx=0,dy=0;if(st.jar==null){const c2=plan.cOf(Math.max(0,v-1/120)),p2=penState(c2),q=P2W(p2.x,p2.y);dx=(pw[0]-q[0])*fit*k*1.6;dy=(pw[1]-q[1])*fit*k*1.6;const L=Math.hypot(dx,dy);if(L>70){dx*=70/L;dy*=70/L}}
   penMB.blurXFilter.blur=Math.abs(dx)*.35;penMB.blurYFilter.blur=Math.abs(dy)*.35}
-export function draw(){app.renderer.render(world,{renderTexture:sceneRT,clear:true,blit:true});[airC(),snowC()].forEach(sc=>{if(sc&&sc.visible&&!ed.on)app.renderer.render(sc,{renderTexture:sceneRT,clear:false,blit:true})});if(OC&&OC.c.visible&&!ed.on){OC.c.position.set(view.W*(OVS-1)/2,view.H*(OVS-1)/2);app.renderer.render(OC.c,{renderTexture:sceneRT,clear:false,blit:true})}app.renderer.render(post)}
+export function draw(){
+  // the zone editor shows the bare page: no particles lying on it (the next frame of the video shows them again)
+  if(ed.on)[airLand(),snowLand()].forEach(c=>{if(c)c.visible=false});
+  app.renderer.render(world,{renderTexture:sceneRT,clear:true,blit:true});[airC(),snowC()].forEach(sc=>{if(sc&&sc.visible&&!ed.on)app.renderer.render(sc,{renderTexture:sceneRT,clear:false,blit:true})});if(OC&&OC.c.visible&&!ed.on){OC.c.position.set(view.W*(OVS-1)/2,view.H*(OVS-1)/2);app.renderer.render(OC.c,{renderTexture:sceneRT,clear:false,blit:true})}app.renderer.render(post)}

@@ -19,7 +19,7 @@ import {renderAddonsUI} from './ui/addons.js';
 import {bindFly,buildFxUI,buildHumUI,buildToolUI,buildAirUI,buildSnowUI,buildWcUI,compactUI} from './ui/controls.js';
 import {REN,exportVideo,saveBlob,saveFrame,saveVideo} from './ui/exporter.js';
 import {bindInspector,renderPal,setSegValue,setSegValue2,updateInspector,zonesChanged} from './ui/inspector.js';
-import {setArt} from './ui/load.js';
+import {resegment,setArt} from './ui/load.js';
 import {LANE,T,bindLane,busy,drawLane,loop,playFresh,playing,rebuild,seek,setLastNow,setMode,setPlayIcon,setPlaying,setT,syncLaneBox,togglePlay} from './ui/playback.js';
 import {LS_KEY,applyProject,loadImg,lsArm,lsClearAll,lsInit,lsOn,lsRead,lsSave,lsSchedule,projectData,readURL,restoreLast,setDeskImage,setLsOn,syncInk} from './ui/project.js';
 import {bindFullscreen} from './ui/stage.js';
@@ -59,7 +59,7 @@ export function boot(){
   $('camMode').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;S.camMode=b.dataset.v;setSegValue('camMode',S.camMode);rebuild(true);syncWizard()};
   $('demo').onclick=()=>{if(!busy)setArt(buildDemo(),false)};
   $('impThr').oninput=e=>{$('impThrV').textContent=(+e.target.value).toFixed(2)};
-  $('impThr').onchange=e=>{IMP.thr=+e.target.value;if(art&&art.colored&&!busy){art.lineCv=extractLines(art.srcCv,IMP.thr);setArt(art,true)}};
+  $('impThr').onchange=e=>{IMP.thr=+e.target.value;if(art&&art.colored&&!busy){art.lineCv=extractLines(art.srcCv,IMP.thr);resegment()}};
   $('impShade').onchange=e=>{SHADE.on=e.target.checked;if(art&&!busy&&seg){if(art.colored&&IMP.useColors)applySrcColors(art.srcCv);renderPal('palette',true);zonesChanged(true)}};
   $('impWhen').onchange=e=>{SHADE.when=e.target.value;if(!busy)zonesChanged(false)};
   $('impColors').onchange=e=>{IMP.useColors=e.target.checked;if(!art||!art.colored||busy)return;if(IMP.useColors)applySrcColors(art.srcCv);else{setPalette(DEFAULT_PALETTES[0].slice());zones.forEach(z=>{z.skip=false;z.tones=null;z.r.layers=null});seg.rank.fill(0);applyPalette(palSeed)}renderPal('palette',true);zonesChanged(true)};

@@ -2,7 +2,7 @@ import {replan} from '../core/plan.js';
 import {analyze} from '../core/segment.js';
 import {FLY,IMP} from '../core/settings.js';
 import {$} from '../core/utils.js';
-import {applySrcColors,art,customOrder,initZones,orderMode,seg,setArtDoc,setCustomOrder,setSeg,zones} from '../core/zones.js';
+import {applySrcColors,art,customOrder,initZones,orderMode,palette,seg,setArtDoc,setCustomOrder,setPalette,setSeg,zones} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
 import {buildScene,buildSparkles} from '../render/scene.js';
 import {renderFlyList} from './controls.js';
@@ -25,16 +25,16 @@ export function setArt(a,openEditor,after){
     syncWizard();
   },30);
 }
-/* Re-runs the segmentation after the user drew a contour. Every new zone takes the settings of the old zone it
-   mostly lies in (colour, skip, camera, speed, tool…), the custom order follows, so only the split zone changes. */
+/* Re-runs the segmentation (after the user drew a contour, or changed how the page is split). Every new zone takes the settings of the old zone it
+   mostly lies in (colour, skip, camera, speed, tool…), the custom order and the palette stay, so only the split zones change. */
 export function resegment(after){
-  const oldLab=seg.lab,oldBy=new Map(zones.map(z=>[z.i,z])),oldOrder=customOrder,oldMode=orderMode;
+  const oldLab=seg.lab,oldBy=new Map(zones.map(z=>[z.i,z])),oldOrder=customOrder,oldMode=orderMode,oldPal=palette.slice(),oW=seg.W,oH=seg.H;
   $('overlay').hidden=false;$('overlay').textContent='Перераховую зони…';setPlaying(false);setPlayIcon();
   setTimeout(()=>{
-    setSeg(analyze(art));initZones();if(art.colored&&IMP.useColors)applySrcColors(art.srcCv);
-    const from=new Map();
+    setSeg(analyze(art));initZones();if(art.colored&&IMP.useColors)applySrcColors(art.srcCv);else setPalette(oldPal);
+    const from=new Map(),kx=oW/seg.W,ky=oH/seg.H;  // the traced outline may have changed the page's resolution
     zones.forEach(z=>{const r=z.r,cnt=new Map(),st=Math.max(1,Math.round(Math.sqrt(r.area)/40));
-      for(let y=r.y0;y<=r.y1;y+=st)for(let x=r.x0;x<=r.x1;x+=st){const p=y*seg.W+x;if(seg.lab[p]!==r.i)continue;const o=oldLab[p];if(o)cnt.set(o,(cnt.get(o)||0)+1)}
+      for(let y=r.y0;y<=r.y1;y+=st)for(let x=r.x0;x<=r.x1;x+=st){const p=y*seg.W+x;if(seg.lab[p]!==r.i)continue;const o=oldLab[Math.min(oH-1,(y*ky)|0)*oW+Math.min(oW-1,(x*kx)|0)];if(o)cnt.set(o,(cnt.get(o)||0)+1)}
       let best=0,bv=0;cnt.forEach((v,k)=>{if(v>bv){bv=v;best=k}});const o=oldBy.get(best);if(!o)return;from.set(z.i,best);
       ['skip','close','zoom','speed','tmul','vshade','tool','style','preset','fill'].forEach(k=>{if(o[k]!==undefined)z[k]=o[k]});
       if(!(art.colored&&IMP.useColors&&o.tones)){z.color=o.color;if(o.flat)z.flat=true}});

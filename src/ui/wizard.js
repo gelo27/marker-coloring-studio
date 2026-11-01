@@ -178,15 +178,15 @@ export function bindWizard(onPreview){
   $('wZoneView').onclick=e=>{const b=e.target.closest('button');if(!b)return;setSegValue('wZoneView',b.dataset.v);enterEditor(b.dataset.v,null)};
   $('wLineK').oninput=e=>{$('wLineKV').textContent=(+e.target.value).toFixed(2)};
   $('wMinArea').oninput=e=>{$('wMinAreaV').textContent=e.target.value};
-  $('wInkTiny').onchange=e=>{IMP.inkTiny=e.target.checked;if(art&&!busy)setArt(art,true,()=>gotoStep(2))};
+  $('wInkTiny').onchange=e=>{IMP.inkTiny=e.target.checked;if(art&&!busy)resegment(()=>gotoStep(2))};
   $('wReseg').onclick=()=>{if(!art||busy)return;const v=+$('wLineK').value;IMP.minArea=+$('wMinArea').value;
     if(art.colored){IMP.thr=v;$('impThr').value=v;$('impThrV').textContent=v.toFixed(2);art.lineCv=extractLines(art.srcCv,IMP.thr)}else{IMP.lineK=v;if(IMP.vec)retrace(art)}
-    setArt(art,true,()=>gotoStep(2))};
+    resegment(()=>gotoStep(2))};
   // the traced outline of a small clean page: on/off and smoothing; both copies of the controls stay in step
   ['imp','w'].forEach(p=>{
-    $(p+'Vec').onchange=e=>{IMP.vec=e.target.checked;$('impVec').checked=$('wVec').checked=IMP.vec;if(!art||!art.rawCv||busy)return;retrace(art);setArt(art,true,p==='w'?()=>gotoStep(2):null)};
+    $(p+'Vec').onchange=e=>{IMP.vec=e.target.checked;$('impVec').checked=$('wVec').checked=IMP.vec;if(!art||!art.rawCv||busy)return;retrace(art);resegment(p==='w'?()=>gotoStep(2):null)};
     $(p+'VecSm').oninput=e=>{$('impVecSmV').textContent=$('wVecSmV').textContent=e.target.value};
-    $(p+'VecSm').onchange=e=>{IMP.vecSm=+e.target.value;$('impVecSm').value=$('wVecSm').value=IMP.vecSm;if(!art||!art.rawCv||!IMP.vec||busy)return;retrace(art);setArt(art,true,p==='w'?()=>gotoStep(2):null)}});
+    $(p+'VecSm').onchange=e=>{IMP.vecSm=+e.target.value;$('impVecSm').value=$('wVecSm').value=IMP.vecSm;if(!art||!art.rawCv||!IMP.vec||busy)return;retrace(art);resegment(p==='w'?()=>gotoStep(2):null)}});
   // zones the outline did not separate: paint them with a brush (any number of strokes), then turn the paint into a zone
   const maskUI=()=>{const B=ed.brush,nm=art&&art.masks?art.masks.length:0,nw=art&&art.walls?art.walls.length:0;$('wBrushBox').hidden=!B.on;$('wBrush').hidden=B.on;
     $('wMaskUndo').disabled=!nm||B.on;$('wMaskClear').disabled=!(nm+nw)||B.on;$('wBrushApply').disabled=!(B.mask&&B.mask.s.some(q=>!q.e));$('wBrushUndo').disabled=!(B.mask&&B.mask.s.length);

@@ -39,7 +39,7 @@ function setup(paperC){textures();
   if(!C){C=new PIXI.Container();air={soft:pool(C,0),rim:pool(C,0),cry:pool(C,0),shade:pool(C,0),bokeh:pool(C,PIXI.BLEND_MODES.ADD),glint:pool(C,PIXI.BLEND_MODES.ADD)};glints=air.glint}
   if(!landC||landC.parent!==paperC){if(landC){if(landC.parent)landC.parent.removeChild(landC);landC.destroy({children:true})}landC=new PIXI.Container();paperC.addChild(landC);
     pools={wet:pool(landC,0),shadow:pool(landC,0),rim:pool(landC,0),cry:pool(landC,0),drop:pool(landC,PIXI.BLEND_MODES.ADD)}}}
-export const snowC=()=>C;
+export const snowC=()=>C,snowLand=()=>landC;
 /* world: the Pixi container holding the page; paperC: the page itself (flakes that land are drawn in its space) */
 export function snowAt(v,world,paperC){
   if(!SNOW.on){if(C)C.visible=false;if(landC)landC.visible=false;return}
