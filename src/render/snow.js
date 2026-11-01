@@ -3,7 +3,7 @@ import {viewFit} from '../core/plan.js';
 import {OVS,view} from '../core/settings.js';
 import {TAU,clamp,mk,rngOf,smoothstep2} from '../core/utils.js';
 import {seg} from '../core/zones.js';
-import {pushOf,viewBox} from './airParts.js';
+import {endV,goneK,nearTool,pageDens,pushOf,viewBox,zoomK} from './airParts.js';
 import {P2W,cam} from './camera.js';
 /* ================= SNOW =================
    Flakes fall through the air between the lens and the page. Each one lives in a cell of the page and repeats a fall
@@ -46,10 +46,10 @@ export function snowAt(v,world,paperC){
   setup(paperC);C.visible=landC.visible=true;
   const fit=viewFit()*cam.z,RW=view.W*OVS,RH=view.H*OVS,cx=RW/2,cy=RH/2,rot=world.rotation,rc=Math.cos(rot),rs=Math.sin(rot),pv=world.pivot;
   const scr=(x,y,k)=>{const w=P2W(x,y),dx=(w[0]-pv.x)*fit*k,dy=(w[1]-pv.y)*fit*k;SP[0]=cx+dx*rc-dy*rs;SP[1]=cy+dx*rs+dy*rc;return SP};  // one shared result: no garbage per particle
-  // fixed page cells; a zoom-dependent share of their candidates shows, so close-ups are not empty and wide shots not crowded
-  const cell=Math.max(seg.W,seg.H)*.18,hw=RW/fit/2,hh2=RH/fit/2,cells=(hw*2/cell)*(hh2*2/cell);
-  const want=10+SNOW.amount*SNOW.amount*230,dens=clamp(want*3.2/(M*Math.max(.6,cells)),0,1);
-  const base=RH*.016*(.4+SNOW.size*1.3)*Math.pow(cam.z,.35);  // flake size on the page's plane, screen px
+  // fixed page cells with a fixed share of their candidates: flakes are real things, so a close-up shows fewer, bigger ones
+  const cell=Math.max(seg.W,seg.H)*.18,hw=RW/fit/2,hh2=RH/fit/2;
+  const want=10+SNOW.amount*SNOW.amount*230,dens=pageDens(want,M,RW,RH,cell),vE=endV(),Rf=cell*.55,endA=1-smoothstep2(0,2,v-vE);
+  const base=RH*.016*(.4+SNOW.size*1.3)*zoomK();  // flake size on the page's plane, screen px
   const Tf0=4+(1-SNOW.speed)*9,wind=(SNOW.wind*2-.5)*cell*.06,Tm=1.2+SNOW.melt*5,coc0=SNOW.dof*RH*.035;
   const camT=(cam.x/seg.W)*9+(cam.y/seg.H)*7+cam.z*3;  // the light's angle to each facet shifts as the camera moves
   const mx=Math.abs(wind)*Tf0*1.6+cell*.2;
@@ -57,14 +57,16 @@ export function snowAt(v,world,paperC){
   const B=viewBox(pv,hw,hh2,rot,mx+base*2/fit),i0=Math.floor(B[0]/cell),i1=Math.floor(B[2]/cell),j0=Math.floor(B[1]/cell),j1=Math.floor(B[3]/cell);
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const cs=(i*73856093^j*19349663)|0;
     for(let n=0;n<M;n++){const sd=cs+n*0x9E3779B1|0,rank=(n+hh(sd))/M;if(rank>=dens)break;  // ranks rise with n: stop at the first one not shown
-      const fade=clamp((dens-rank)/(dens*.04+1e-4),0,1);  // a thin band: only those crossing it while the zoom changes fade
+      const fade0=clamp((dens-rank)/(dens*.04+1e-4),0,1);  // a thin band: only those crossing it as the amount changes fade
       const Tf=Tf0*(.75+.5*hh(sd+1)),ph=hh(sd+2),u=v/Tf+ph,k=Math.floor(u),f=1-(u-k),ss=.55+.9*Math.pow(hh(sd+3),2);
       // ---- in the air ----
-      if(f<.965){const cy2=sd+k*7919|0,bx=(i+hh(cy2+4))*cell,by=(j+hh(cy2+5))*cell,left=f*Tf,
+      // none set off after the painting is done, none coming down on the tips' work (see nearTool)
+      const cyA=sd+k*7919|0,bxA=(i+hh(cyA+4))*cell,byA=(j+hh(cyA+5))*cell,fade=fade0;
+      if(f<.965&&(k-ph)*Tf<=vE&&!nearTool(bxA,byA,(k+1-ph)*Tf,Tf,Rf)){const cy2=cyA,bx=bxA,by=byA,left=f*Tf,
           sw=Math.sin(v*(.8+hh(sd+6))+hh(sd+7)*TAU)*cell*.025*f,x=bx-wind*left+sw,y=by-wind*.25*left+Math.cos(v*.9+hh(sd+8)*TAU)*cell*.012*f;
         const kz=1/(1-f),p=scr(x,y,kz),sz=base*ss*kz,coc=coc0*f*kz,ext=sz+coc;
         if(p[0]>-ext&&p[0]<RW+ext&&p[1]>-ext&&p[1]<RH+ext){
-          const al=fade*smoothstep2(.965,.88,f),bl=coc/sz,m1=smoothstep2(.15,.7,bl),m2=smoothstep2(.7,2,bl);
+          const al=fade*endA*smoothstep2(.965,.88,f),bl=coc/sz,m1=smoothstep2(.15,.7,bl),m2=smoothstep2(.7,2,bl);
           const tum=v*(1.2+hh(sd+9)*2.4)+hh(sd+10)*TAU,spin=hh(sd+11)*TAU+v*(hh(sd+12)-.5)*1.6,sy=.3+.7*Math.abs(Math.cos(tum));
           const g=Math.pow(Math.max(0,Math.cos(tum*1.7+camT+p[0]*.004+p[1]*.003+hh(sd+13)*TAU)),60)*SNOW.glint;
           // ice is clear: its edges refract the darker world behind, so a flake reads on white paper as well as on the desk
@@ -77,11 +79,12 @@ export function snowAt(v,world,paperC){
           if(m2>0){const s=take(air.bokeh,T.bokeh);if(s){s.position.set(p[0],p[1]);s.rotation=0;s.scale.set((sz*.6+coc)/128);s.alpha=al*m2*clamp(.3+1.2*sz/(sz+coc),.26,.7)*(1+g*.8);s.tint=0xe8eef8}}
           if(g>.04&&m2<1){const s=take(glints,T.glint);if(s){s.position.set(p[0],p[1]);s.rotation=.4+spin*.1;s.scale.set(sz*(1.2+2.4*g)/128*(1+m1));s.alpha=al*clamp(g*1.4,0,1)*(1-m2);s.tint=0xffffff}}}
         // a soft shadow gathers under a flake about to land
-        if(f<.07){const lx=bx,ly=by,s=take(pools.shadow,T.soft);if(s){s.position.set(lx+f*cell*.35,ly+f*cell*.5);s.scale.set(base*ss/fit*(1+f*8)/128);s.alpha=fade*.16*(1-f/.07);s.tint=0x1a2030;s.rotation=0}}}
+        if(f<.07){const lx=bx,ly=by,s=take(pools.shadow,T.soft);if(s){s.position.set(lx+f*cell*.35,ly+f*cell*.5);s.scale.set(base*ss/fit*(1+f*8)/128);s.alpha=fade*endA*.16*(1-f/.07);s.tint=0x1a2030;s.rotation=0}}}
       // ---- landed: lies a moment, then melts into a wet spot that dries ----
       for(let q=1;q<=3;q++){const kl=k-q+1,tl=(kl-ph)*Tf,age=v-tl;if(age<0)continue;if(age>Tm)break;
         const cy2=sd+(kl-1)*7919|0,lx=(i+hh(cy2+4))*cell,ly=(j+hh(cy2+5))*cell,p=scr(lx,ly,1),r=base*ss*1.4;
         if(p[0]<-r||p[0]>RW+r||p[1]<-r||p[1]>RH+r)continue;
+        if(tl-Tf>vE||nearTool(lx,ly,tl,Tf,Rf))continue;const fade=fade0*goneK(tl,v,vE);if(fade<=0)continue;
         const e=age/Tm,szp=base*ss/fit,melt=smoothstep2(.12,.7,e),dry=smoothstep2(.45,1,e),ang=hh(cy2+14)*TAU;
         // the crystal itself can be swept or blown away by a passing tool; its water stays where it landed
         const pq=melt<1?pushOf(lx,ly,tl,v,szp*.5,cy2*8+7):null,cx2=pq?pq[0]:lx,cy3=pq?pq[1]:ly,pa=pq?pq[2]:0;

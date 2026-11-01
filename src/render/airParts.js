@@ -103,16 +103,17 @@ export function viewBox(pv,hw,hh,rot,m){const a=rot+PRot,co=Math.abs(Math.cos(a)
    the moment it landed: a tool passing close drags it along and blows it away from the tip, the more the faster and
    closer it goes (touching the paper it sweeps, lifted only its draught). The same at any frame, however reached. */
 const PR=30,TOOL_R=42*SS,TS=new Map(),PC=new Map(),SP=[0,0],PQ=[0,0,0,0];let tsPlan=null,pcFrame=0;
+function tsSync(){if(tsPlan!==plan){TS.clear();PC.clear();tsPlan=plan}}
 function toolAt(g){let s=TS.get(g);if(s)return s;
   const c=plan.cOf(g/PR),n=plan.tracks?plan.tracks.length:1;s=[];for(let k=0;k<n;k++){const q=penState(c,k);s.push(q.x,q.y,q.h||0)}
   // keep only the last ~20 s around the current time (a lying particle never looks further back)
-  if(TS.size>1500)for(const key of TS.keys())if(key<g-20*PR||key>g+20*PR)TS.delete(key);
+  if(TS.size>3000)for(const key of TS.keys())if(key<g-45*PR||key>g+45*PR)TS.delete(key);
   TS.set(g,s);return s}
 /* where a particle that landed at (lx,ly) at time tl has been pushed to by time v; r: its radius (page units).
    Returns [x, y, turn, lift] (lift 0..1: how fast it is sliding, for its shadow), in one shared array: read it at once;
    key: a number naming the particle's landing; its state is kept, so during playback it only steps the new frames */
 export function pushOf(lx,ly,tl,v,r,key){
-  if(tsPlan!==plan){TS.clear();PC.clear();tsPlan=plan}
+  tsSync();
   const g0=Math.ceil(tl*PR),g1=Math.floor(v*PR),dt=1/PR,fr=Math.exp(-5*dt),fw=Math.exp(-3*dt);
   PQ[0]=lx;PQ[1]=ly;PQ[2]=PQ[3]=0;if(!plan||g1<g0)return PQ;
   let st=PC.get(key);if(!st||st.tl!==tl||st.lx!==lx||st.g>g1){st={tl,lx,ly,g:g0-1,x:lx,y:ly,vx:0,vy:0,w:0,a:0};PC.set(key,st)}st.f=pcFrame;
@@ -133,27 +134,27 @@ export function airAt(v,world,paperC){
   setup(paperC);C.visible=landC.visible=true;
   const fit=viewFit()*cam.z,RW=view.W*OVS,RH=view.H*OVS,cx=RW/2,cy=RH/2,rot=world.rotation,rc=Math.cos(rot),rs=Math.sin(rot),pv=world.pivot;
   const scr=(x,y,k)=>{const w=P2W(x,y),dx=(w[0]-pv.x)*fit*k,dy=(w[1]-pv.y)*fit*k;SP[0]=cx+dx*rc-dy*rs;SP[1]=cy+dx*rs+dy*rc;return SP};  // one shared result: no garbage per particle
-  const cell=Math.max(seg.W,seg.H)*.18,hw=RW/fit/2,hh2=RH/fit/2,cells=Math.max(.6,(hw*2/cell)*(hh2*2/cell));
-  const windB=(AIR.wind*2-.5)*cell*.06,coc0=AIR.dof*RH*.035,zs=Math.pow(cam.z,.35);
+  const cell=Math.max(seg.W,seg.H)*.18,hw=RW/fit/2,hh2=RH/fit/2;
+  const windB=(AIR.wind*2-.5)*cell*.06,coc0=AIR.dof*RH*.035,zs=zoomK(),vE=endV(),Rf=cell*.55,endA=1-smoothstep2(0,2,v-vE);  // what is still in the air when it ends fades away
   const beamC=v2=>.32+.12*Math.sin(v2*.05)+(cam.x/seg.W-.5)*.25;
   if(AIR.dust.on){const b=take(L.beam,T.beam),o=beamC(v)*RW-(cx*.8-cy*.6);if(b){b.position.set(cx+.8*o,cy-.6*o);b.rotation=Math.atan2(-.6,.8);b.scale.set(RW*.8/256,RW*3/4);b.alpha=.05+.07*AIR.dust.amount;b.tint=0xfff0d6}}
   KINDS.forEach((id,ki)=>{const c=AIR[id];if(!c.on)return;const D=KD[id],TX=T[id];
-    const dens=clamp(D.want(c.amount)*3.2/(D.M*cells),0,1),base=RH*D.size*(.4+c.size*1.3)*zs,sp=1.5-c.speed,wind=windB*D.wind;
+    const dens=pageDens(D.want(c.amount),D.M,RW,RH,cell),base=RH*D.size*(.4+c.size*1.3)*zs,sp=1.5-c.speed,wind=windB*D.wind;
     const TfMin=D.Tf*sp*.75,mx=Math.abs(wind)*D.Tf*sp*1.3+cell*(.2+(D.sway||0)),qmax=D.lie?Math.ceil(D.lie/TfMin)+1:D.pop?2:0;
     const B=viewBox(pv,hw,hh2,rot,mx+base*2/fit),i0=Math.floor(B[0]/cell),i1=Math.floor(B[2]/cell),j0=Math.floor(B[1]/cell),j1=Math.floor(B[3]/cell);
     for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const cs=(i*73856093^j*19349663^(ki+1)*83492791)|0;
       for(let n=0;n<D.M;n++){const sd=cs+n*0x9E3779B1|0,rank=(n+hh(sd))/D.M;if(rank>=dens)break;  // ranks rise with n: stop at the first one not shown
-        const fade=clamp((dens-rank)/(dens*.04+1e-4),0,1);  // a thin band: only those crossing it while the zoom changes fade
+        const fade=clamp((dens-rank)/(dens*.04+1e-4),0,1),fade0=fade;  // a thin band: only those crossing it as the amount changes fade
         const Tf=D.Tf*(D.float?1:sp)*(.75+.5*hh(sd+1)),ph=hh(sd+2),u=v/Tf+ph,k=Math.floor(u),ss=.6+.8*Math.pow(hh(sd+3),2),vr=(sd>>>3)&3;
-        const cy2=sd+k*7919|0,bx=(i+hh(cy2+4))*cell,by=(j+hh(cy2+5))*cell;
-        if(D.float){dust(v,u-k,bx,by,sd,cy2,fade,ss);continue}
+        const cy2=sd+k*7919|0,bx=(i+hh(cy2+4))*cell,by=(j+hh(cy2+5))*cell,tL=(k+1-ph)*Tf;
+        if(D.float){if((k-ph)*Tf<=vE&&!nearTool(bx,by,tL,Tf,Rf))dust(v,u-k,bx,by,sd,cy2,fade*goneK(tL,v,vE),ss);continue}
         const f=1-(u-k);
-        // ---- in the air ----
-        if(f<.965){const left=f*Tf,wf=D.swayF*(.8+.4*hh(sd+6)),ws=hh(sd+7)*TAU,
+        // ---- in the air (none set off after the painting is done, none coming down on the tips' work) ----
+        if(f<.965&&(k-ph)*Tf<=vE&&!nearTool(bx,by,tL,Tf,Rf)){const left=f*Tf,wf=D.swayF*(.8+.4*hh(sd+6)),ws=hh(sd+7)*TAU,
             x=bx-wind*left+Math.sin(v*wf*TAU*.3+ws)*cell*D.sway*f,y=by-wind*.25*left+Math.cos(v*wf*TAU*.22+ws)*cell*D.sway*.45*f;
           const kz=1/(1-f),p=scr(x,y,kz),sz=base*ss*kz,coc=coc0*f*kz,ext=sz+coc;
           if(p[0]>-ext&&p[0]<RW+ext&&p[1]>-ext&&p[1]<RH+ext){
-            const al=fade*smoothstep2(.965,.88,f),bl=coc/sz,m1=smoothstep2(.12,.6,bl),m2=smoothstep2(.6,1.8,bl);
+            const al=fade*endA*smoothstep2(.965,.88,f),bl=coc/sz,m1=smoothstep2(.12,.6,bl),m2=smoothstep2(.6,1.8,bl);
             const tum=v*D.tum*(.7+.6*hh(sd+9))+hh(sd+10)*TAU,fl=Math.cos(tum),spin=hh(sd+11)*TAU+v*D.spin*(hh(sd+12)-.5)*2;
             const sy=id==='bubbles'?1+.04*Math.sin(v*3+ws):D.flat+(1-D.flat)*Math.abs(fl),sx=id==='bubbles'?1-.04*Math.sin(v*3+ws):1;
             const tint=tintOf(id,sd,fl),tx=TX.s[vr%TX.s.length],tb=TX.b[vr%TX.b.length];
@@ -165,11 +166,12 @@ export function airAt(v,world,paperC){
             if(m2>0){const s=take(L.bok,T.disc);if(s){s.position.set(p[0],p[1]);s.scale.set((sz*.6+coc)/N);s.alpha=al*m2*(D.pop?clamp(.15+.9*sz/(sz+coc),.12,.45):clamp(.35+.9*sz/(sz+coc),.35,.75));s.tint=D.col}}
             if(D.pop){const s=take(L.add,T.hi);if(s){s.position.set(p[0],p[1]);s.scale.set((sz*sx+coc*.5)/N,(sz*sy+coc*.5)/N);s.alpha=al*(.85-.6*m2)}}}
           // a soft shadow gathers under it before it touches down
-          if(f<.08){const s=take(G.shadow,T.soft);if(s){s.position.set(bx+f*cell*.35,by+f*cell*.5);s.scale.set(base*ss/fit*(1+f*8)/N);s.alpha=fade*(D.pop?.07:.15)*(1-f/.08);s.tint=0x1a2030}}}
+          if(f<.08){const s=take(G.shadow,T.soft);if(s){s.position.set(bx+f*cell*.35,by+f*cell*.5);s.scale.set(base*ss/fit*(1+f*8)/N);s.alpha=fade*endA*(D.pop?.07:.15)*(1-f/.08);s.tint=0x1a2030}}}
         // ---- on the page ----
         for(let q=1;q<=qmax;q++){const kl=k-q+1,tl=(kl-ph)*Tf,age=v-tl,life=D.lie||3;if(age<0)continue;if(age>life)break;
           const c2=sd+(kl-1)*7919|0,lx=(i+hh(c2+4))*cell,ly=(j+hh(c2+5))*cell,p=scr(lx,ly,1),r=base*ss*1.6;
           if(p[0]<-r||p[0]>RW+r||p[1]<-r||p[1]>RH+r)continue;
+          if(tl-Tf>vE||nearTool(lx,ly,tl,Tf,Rf))continue;const fade=fade0*goneK(tl,v,vE);if(fade<=0)continue;
           const szp=base*ss/fit,ang=hh(c2+14)*TAU;
           if(D.pop){  // the film bursts: a quick ring, then the faint ring of its water dries away
             if(age<.18){const s=take(G.add,TX.s[0]);if(s){s.position.set(lx,ly);s.rotation=ang;s.scale.set(szp*(1+age*4)/N);s.alpha=fade*(1-age/.18)*.7}}
@@ -194,6 +196,21 @@ export function airAt(v,world,paperC){
     if(m>0){const s=take(L.add,T.disc);if(s){s.position.set(p[0],p[1]);s.scale.set((sz+coc)/N);s.alpha=al*m*clamp(.15+.8*sz/(sz+coc),.1,.35);s.tint=0xffe2b8}}}
   [...Object.values(L),...Object.values(G)].forEach(finish);
 }
+/* ---- what the camera looks at, how big things are, when it all ends ----
+   Nothing comes down where the tips are working (the camera's subject): a fall is checked against where they are when it
+   lands and a while before, so it is shown or skipped whole (no particle fades out on its way down). */
+export function nearTool(x,y,tl,Tf,R){if(!plan||!plan.cOf)return false;tsSync();const R2=R*R;
+  for(const t of [tl,tl-Tf*.4]){const s=toolAt(Math.round(t*PR));for(let k=0;k<s.length;k+=3){const dx=x-s[k],dy=y-s[k+1];if(dx*dx+dy*dy<R2)return true}}
+  return false}
+/* particles are things of a fixed size in the room: on screen they grow with the zoom (Z0: the zoom where sizes match
+   the old screen-sized look) and their number on the page stays the same, so a close-up shows fewer, bigger ones */
+export const Z0=2;
+export const zoomK=()=>cam.z/Z0*Math.pow(Z0,.35);
+/* share of a cell's candidates shown for `want` particles in a frame at zoom Z0 (page cells of size `cell`) */
+export function pageDens(want,M,RW,RH,cell){const f=viewFit()*Z0;return clamp(want*3.2/(M*Math.max(.6,RW*RH/(f*f*cell*cell))),0,1)}
+/* the video time the painting is finished: nothing more falls after it, and what lies there clears away */
+export const endV=()=>plan&&plan.vOf&&plan.endC!=null?plan.vOf(plan.endC):1e9;
+export const goneK=(tl,v,vE)=>1-smoothstep2(0,1.2,v-Math.max(vE,tl));
 /* forget the pushes of particles nobody asked for lately (gone from view or melted away) */
 export function pushSweep(){pcFrame++;if(PC.size>600)for(const[k,s]of PC)if(s.f<pcFrame-30)PC.delete(k)}
 /* colour of a particle: leaves take an autumn hue (and look darker from the back), petals blush a little on the back */
