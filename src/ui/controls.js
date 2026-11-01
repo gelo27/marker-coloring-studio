@@ -7,6 +7,7 @@ import {ed} from '../editor/editor.js';
 import {renderAt} from '../render/renderer.js';
 import {WC,WC_DEF,wcClearCache} from '../render/watercolor.js';
 import {setToolSprite} from '../render/scene.js';
+import {SNOW,SNOW_DEF} from '../render/snow.js';
 import {setSegValue} from './inspector.js';
 import {T,busy,playFresh,playing,rebuild,seek,setMode,setPlaying} from './playback.js';
 /* ================= WIRE UI ================= */
@@ -41,6 +42,19 @@ export function buildWcUI(onChange){
   WC_UI.forEach(([k,,mn])=>{const e=$('wc_'+k);if(mn===undefined){e.onchange=()=>{WC[k]=e.checked?1:0;apply()};return}
     e.oninput=()=>{$('wc_'+k+'V').textContent=(+e.value).toFixed(2)};e.onchange=()=>{WC[k]=+e.value;apply()}});
   $('wcReset').onclick=()=>{Object.assign(WC,WC_DEF);syncWcUI();apply()};syncWcUI()}
+/* snow: drawn per frame, so sliders show at once */
+const SNOW_UI=[['amount','Кількість сніжинок',0,1,.01],['size','Розмір',0,1,.01],['speed','Швидкість падіння',0,1,.01],['wind','Вітер',0,1,.01],
+  ['dof','Розмиття близьких (фокус камери)',0,1,.01],['crystal','Видно кристали',0,1,.01],['glint','Відблиски',0,1,.01],['melt','Час танення на аркуші',0,1,.01]];
+export function syncSnowUI(){const on=$('snowOn');if(!on)return;on.checked=!!SNOW.on;$('snowBadge').textContent=SNOW.on?'увімк.':'вимк.';$('snowSl').hidden=!SNOW.on;
+  SNOW_UI.forEach(([k])=>{const e=$('snow_'+k);e.value=SNOW[k];$('snow_'+k+'V').textContent=Math.round(SNOW[k]*100)})}
+export function buildSnowUI(onChange){
+  const box=$('snowBox');if(!box)return;
+  box.innerHTML='<label class="switch"><input type="checkbox" id="snowOn"> Падає сніг</label><div id="snowSl">'+SNOW_UI.map(([k,l,mn,mx,st])=>'<div class="row"><label for="snow_'+k+'">'+l+'</label><span class="val" id="snow_'+k+'V"></span></div><input type="range" id="snow_'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'">').join('')
+    +'<div class="btns"><button class="btn small" id="snowReset">Скинути сніг</button></div></div><p class="hint">Сніжинки падають між камерою та аркушем: близькі розмиваються, біля паперу видно кристали, які блищать під час руху камери, а на аркуші вони тануть.</p>';
+  const redraw=()=>{if(!playing&&!ed.on&&!busy)renderAt(T)};
+  $('snowOn').onchange=e=>{SNOW.on=e.target.checked?1:0;syncSnowUI();redraw();onChange()};
+  SNOW_UI.forEach(([k])=>{const e=$('snow_'+k);e.oninput=()=>{SNOW[k]=+e.value;$('snow_'+k+'V').textContent=Math.round(SNOW[k]*100);redraw()};e.onchange=onChange});
+  $('snowReset').onclick=()=>{Object.assign(SNOW,SNOW_DEF,{on:SNOW.on});syncSnowUI();redraw();onChange()};syncSnowUI()}
 export function renderFlyList(){
   const el=$('flyList');if(!el||!plan)return;el.innerHTML='';
   $('flyBadge').textContent=FLY.mode==='off'?'вимк.':FLY.segs&&FLY.segs.length?'власні':'авто';

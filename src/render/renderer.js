@@ -10,6 +10,7 @@ import {GL,updateParts} from './glitter.js';
 import {OC,outroAt} from './outro.js';
 import {flushPaint,paintAt,wetAt} from './paint.js';
 import {app,jarC,jarTint,liqDropAt,markHeightDirty,paperC,paperShader,penC,penShadow,penTint,post,postShader,renderHeight,sceneRT,useSprite,world} from './scene.js';
+import {snowAt,snowC} from './snow.js';
 import {shadowHover} from './toolSprites.js';
 /* ================= RENDER ================= */
 export const fxv=k=>S.fx[k].on&&!fxOff()?S.fx[k].v:0;
@@ -75,6 +76,7 @@ export function renderAt(v){
   {const pp=fxv('persp'),sh2=plan.shots[cam.shot],fly=sh2&&sh2.fly,pq=pp*.22*(S.camMode==='cat'&&addonHasFocus()?1.6:1),yaw=clamp(cam.vx*fit/view.W*.0035,-.035,.035)*pp/.55+.022*pp*Math.sin(v*.19);
    U2.uPersp=[pq*(fly?.8:1),yaw,fxv('lens')*.07];U2.uDof=pp*(.35+.65*smoothstep2(1.1,2.4,cam.z));
    U2.uBreath=1+fxv('lens')*.022*clamp(Math.abs(cam.fyv||0)*2.2,0,1);U2.uTime=v;U2.uGrain=fxv('grain');U2.uDust=fxv('lens')}
+  snowAt(v,world,paperC);
   runHook('late',{v,c});
   penBlur(c,v,st,pw,fit);
   outroAt(v);
@@ -95,4 +97,4 @@ export function penBlur(c,v,st,pw,fit){const k=fxv('penblur');if(!penC)return;
   if(!penC.filters||penC.filters[0]!==penMB)penC.filters=[penMB];
   let dx=0,dy=0;if(st.jar==null){const c2=plan.cOf(Math.max(0,v-1/120)),p2=penState(c2),q=P2W(p2.x,p2.y);dx=(pw[0]-q[0])*fit*k*1.6;dy=(pw[1]-q[1])*fit*k*1.6;const L=Math.hypot(dx,dy);if(L>70){dx*=70/L;dy*=70/L}}
   penMB.blurXFilter.blur=Math.abs(dx)*.35;penMB.blurYFilter.blur=Math.abs(dy)*.35}
-export function draw(){app.renderer.render(world,{renderTexture:sceneRT,clear:true,blit:true});if(OC&&OC.c.visible&&!ed.on){OC.c.position.set(view.W*(OVS-1)/2,view.H*(OVS-1)/2);app.renderer.render(OC.c,{renderTexture:sceneRT,clear:false,blit:true})}app.renderer.render(post)}
+export function draw(){app.renderer.render(world,{renderTexture:sceneRT,clear:true,blit:true});const sc=snowC();if(sc&&sc.visible&&!ed.on)app.renderer.render(sc,{renderTexture:sceneRT,clear:false,blit:true});if(OC&&OC.c.visible&&!ed.on){OC.c.position.set(view.W*(OVS-1)/2,view.H*(OVS-1)/2);app.renderer.render(OC.c,{renderTexture:sceneRT,clear:false,blit:true})}app.renderer.render(post)}
