@@ -3,7 +3,7 @@ import {viewFit} from '../core/plan.js';
 import {OVS,view} from '../core/settings.js';
 import {TAU,clamp,mk,rngOf,smoothstep2} from '../core/utils.js';
 import {seg} from '../core/zones.js';
-import {pushOf} from './airParts.js';
+import {pushOf,viewBox} from './airParts.js';
 import {P2W,cam} from './camera.js';
 /* ================= SNOW =================
    Flakes fall through the air between the lens and the page. Each one lives in a cell of the page and repeats a fall
@@ -14,7 +14,7 @@ import {P2W,cam} from './camera.js';
    On the page it lies a moment, then melts into a small wet spot that dries away. */
 export const SNOW_DEF={on:0,amount:.3,size:.5,speed:.5,wind:.25,dof:.6,glint:.6,melt:.5,crystal:.6};
 export const SNOW=Object.assign({},SNOW_DEF);
-const M=48,MAXS=700;  // candidates per cell, sprite cap per layer
+const M=48,MAXS=700,SP=[0,0];  // candidates per cell, sprite cap per layer
 let T=null,C=null,air=null,glints=null,landC=null,pools=null;
 const hh=a=>{a|=0;a=Math.imul(a^a>>>16,0x45d9f3b);a=Math.imul(a^a>>>16,0x45d9f3b);return((a^a>>>16)>>>0)/4294967296};
 /* ---- textures (white, tinted per sprite) ---- */
@@ -37,7 +37,7 @@ function take(p,tex){let s=p.s[p.n];if(!s){if(p.s.length>=MAXS)return null;s=new
 function finish(p){for(let i=p.n;i<p.s.length;i++)p.s[i].visible=false;p.n=0}
 function setup(paperC){textures();
   if(!C){C=new PIXI.Container();air={soft:pool(C,0),rim:pool(C,0),cry:pool(C,0),shade:pool(C,0),bokeh:pool(C,PIXI.BLEND_MODES.ADD),glint:pool(C,PIXI.BLEND_MODES.ADD)};glints=air.glint}
-  if(!landC||landC.parent!==paperC){if(landC&&landC.parent)landC.parent.removeChild(landC);landC=new PIXI.Container();paperC.addChild(landC);
+  if(!landC||landC.parent!==paperC){if(landC){if(landC.parent)landC.parent.removeChild(landC);landC.destroy({children:true})}landC=new PIXI.Container();paperC.addChild(landC);
     pools={wet:pool(landC,0),shadow:pool(landC,0),rim:pool(landC,0),cry:pool(landC,0),drop:pool(landC,PIXI.BLEND_MODES.ADD)}}}
 export const snowC=()=>C;
 /* world: the Pixi container holding the page; paperC: the page itself (flakes that land are drawn in its space) */
@@ -45,7 +45,7 @@ export function snowAt(v,world,paperC){
   if(!SNOW.on){if(C)C.visible=false;if(landC)landC.visible=false;return}
   setup(paperC);C.visible=landC.visible=true;
   const fit=viewFit()*cam.z,RW=view.W*OVS,RH=view.H*OVS,cx=RW/2,cy=RH/2,rot=world.rotation,rc=Math.cos(rot),rs=Math.sin(rot),pv=world.pivot;
-  const scr=(x,y,k)=>{const w=P2W(x,y),dx=(w[0]-pv.x)*fit*k,dy=(w[1]-pv.y)*fit*k;return[cx+dx*rc-dy*rs,cy+dx*rs+dy*rc]};
+  const scr=(x,y,k)=>{const w=P2W(x,y),dx=(w[0]-pv.x)*fit*k,dy=(w[1]-pv.y)*fit*k;SP[0]=cx+dx*rc-dy*rs;SP[1]=cy+dx*rs+dy*rc;return SP};  // one shared result: no garbage per particle
   // fixed page cells; a zoom-dependent share of their candidates shows, so close-ups are not empty and wide shots not crowded
   const cell=Math.max(seg.W,seg.H)*.18,hw=RW/fit/2,hh2=RH/fit/2,cells=(hw*2/cell)*(hh2*2/cell);
   const want=10+SNOW.amount*SNOW.amount*230,dens=clamp(want*3.2/(M*Math.max(.6,cells)),0,1);
@@ -53,10 +53,11 @@ export function snowAt(v,world,paperC){
   const Tf0=4+(1-SNOW.speed)*9,wind=(SNOW.wind*2-.5)*cell*.06,Tm=1.2+SNOW.melt*5,coc0=SNOW.dof*RH*.035;
   const camT=(cam.x/seg.W)*9+(cam.y/seg.H)*7+cam.z*3;  // the light's angle to each facet shifts as the camera moves
   const mx=Math.abs(wind)*Tf0*1.6+cell*.2;
-  // page-space box under the view (the paper is only slightly rotated: pad generously)
-  const R=Math.hypot(hw,hh2)*1.05+mx,i0=Math.floor((pv.x-R)/cell),i1=Math.floor((pv.x+R)/cell),j0=Math.floor((pv.y-R)/cell),j1=Math.floor((pv.y+R)/cell);
+  // only cells under the frame can show (see viewBox)
+  const B=viewBox(pv,hw,hh2,rot,mx+base*2/fit),i0=Math.floor(B[0]/cell),i1=Math.floor(B[2]/cell),j0=Math.floor(B[1]/cell),j1=Math.floor(B[3]/cell);
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const cs=(i*73856093^j*19349663)|0;
-    for(let n=0;n<M;n++){const sd=cs+n*0x9E3779B1|0,rank=hh(sd);if(rank>=dens)continue;const fade=clamp((dens-rank)/(dens*.25+1e-4),0,1);
+    for(let n=0;n<M;n++){const sd=cs+n*0x9E3779B1|0,rank=(n+hh(sd))/M;if(rank>=dens)break;  // ranks rise with n: stop at the first one not shown
+      const fade=clamp((dens-rank)/(dens*.04+1e-4),0,1);  // a thin band: only those crossing it while the zoom changes fade
       const Tf=Tf0*(.75+.5*hh(sd+1)),ph=hh(sd+2),u=v/Tf+ph,k=Math.floor(u),f=1-(u-k),ss=.55+.9*Math.pow(hh(sd+3),2);
       // ---- in the air ----
       if(f<.965){const cy2=sd+k*7919|0,bx=(i+hh(cy2+4))*cell,by=(j+hh(cy2+5))*cell,left=f*Tf,
@@ -83,10 +84,10 @@ export function snowAt(v,world,paperC){
         if(p[0]<-r||p[0]>RW+r||p[1]<-r||p[1]>RH+r)continue;
         const e=age/Tm,szp=base*ss/fit,melt=smoothstep2(.12,.7,e),dry=smoothstep2(.45,1,e),ang=hh(cy2+14)*TAU;
         // the crystal itself can be swept or blown away by a passing tool; its water stays where it landed
-        const pq=melt<1?pushOf(lx,ly,tl,v,szp*.5):[lx,ly,0],cx2=pq[0],cy3=pq[1];
+        const pq=melt<1?pushOf(lx,ly,tl,v,szp*.5,cy2*8+7):null,cx2=pq?pq[0]:lx,cy3=pq?pq[1]:ly,pa=pq?pq[2]:0;
         const w=take(pools.wet,T.wet);if(w){w.position.set(lx,ly);w.rotation=ang;w.scale.set(szp*(.55+.35*melt)/128,szp*(.5+.3*melt)/128);w.alpha=fade*.22*smoothstep2(0,.3,e)*(1-dry);w.tint=0x18263a}
-        if(melt<1){const r=take(pools.rim,T.cry[(cy2>>>3)&3]);if(r){r.position.set(cx2+szp*.03,cy3+szp*.05);r.rotation=ang+pq[2];r.scale.set(szp*(1-.55*melt)*1.1/128);r.alpha=fade*(1-melt)*.55;r.tint=0x4a5a70}}
-        if(melt<1){const s=take(pools.cry,T.cry[(cy2>>>3)&3]);if(s){s.position.set(cx2,cy3);s.rotation=ang+pq[2];s.scale.set(szp*(1-.55*melt)/128);s.alpha=fade*(1-melt)*.95;s.tint=0xf6faff}}
+        if(melt<1){const r=take(pools.rim,T.cry[(cy2>>>3)&3]);if(r){r.position.set(cx2+szp*.03,cy3+szp*.05);r.rotation=ang+pa;r.scale.set(szp*(1-.55*melt)*1.1/128);r.alpha=fade*(1-melt)*.55;r.tint=0x4a5a70}}
+        if(melt<1){const s=take(pools.cry,T.cry[(cy2>>>3)&3]);if(s){s.position.set(cx2,cy3);s.rotation=ang+pa;s.scale.set(szp*(1-.55*melt)/128);s.alpha=fade*(1-melt)*.95;s.tint=0xf6faff}}
         const g=Math.pow(Math.max(0,Math.cos(camT*1.3+hh(cy2+15)*TAU+v*.6)),24)*SNOW.glint;
         const d=take(pools.drop,T.drop);if(d){d.position.set(lx-szp*.12,ly-szp*.14);d.rotation=0;d.scale.set(szp*(.18+.25*g)/128);d.alpha=fade*(.25+.75*g)*smoothstep2(.2,.5,e)*(1-dry)*.9;d.tint=0xffffff}}}}
   [...Object.values(air),...Object.values(pools)].forEach(finish);

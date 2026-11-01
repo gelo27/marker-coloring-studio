@@ -10,7 +10,7 @@ import {GL,updateParts} from './glitter.js';
 import {OC,outroAt} from './outro.js';
 import {flushPaint,paintAt,wetAt} from './paint.js';
 import {app,jarC,jarTint,liqDropAt,markHeightDirty,paperC,paperShader,penC,penShadow,penTint,post,postShader,renderHeight,sceneRT,useSprite,world} from './scene.js';
-import {airAt,airC} from './airParts.js';
+import {airAt,airC,pushSweep} from './airParts.js';
 import {snowAt,snowC} from './snow.js';
 import {shadowHover} from './toolSprites.js';
 /* ================= RENDER ================= */
@@ -77,7 +77,7 @@ export function renderAt(v){
   {const pp=fxv('persp'),sh2=plan.shots[cam.shot],fly=sh2&&sh2.fly,pq=pp*.22*(S.camMode==='cat'&&addonHasFocus()?1.6:1),yaw=clamp(cam.vx*fit/view.W*.0035,-.035,.035)*pp/.55+.022*pp*Math.sin(v*.19);
    U2.uPersp=[pq*(fly?.8:1),yaw,fxv('lens')*.07];U2.uDof=pp*(.35+.65*smoothstep2(1.1,2.4,cam.z));
    U2.uBreath=1+fxv('lens')*.022*clamp(Math.abs(cam.fyv||0)*2.2,0,1);U2.uTime=v;U2.uGrain=fxv('grain');U2.uDust=fxv('lens')}
-  snowAt(v,world,paperC);airAt(v,world,paperC);
+  snowAt(v,world,paperC);airAt(v,world,paperC);pushSweep();
   runHook('late',{v,c});
   penBlur(c,v,st,pw,fit);
   outroAt(v);
