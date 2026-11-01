@@ -136,12 +136,30 @@ function shadowTex(name){
   const contact=(X,Y,r)=>.72*Math.exp(-Math.pow(Math.max(0,X)/(P.R*.8+9),2))*Math.exp(-Math.pow(Math.max(0,-X)/2.4,2))*Math.exp(-Math.pow(Y/(r*.85+2.4),2));
   return SH_CACHE[name]={soft:tex(cast(true)),cast:tex(cast(false)),contact:tex(contact),K,pad,cy};
 }
-function buildShadow(name){const T=shadowTex(name),c=new PIXI.Container();
-  ['soft','cast','contact'].forEach(k=>{const s=new PIXI.Sprite(T[k]);s.scale.set(SS/T.K);s.position.set(-T.pad*SS,-T.cy*SS);c.addChild(s)});return c}
+function buildShadow(name){const T=shadowTex(name),c=new PIXI.Container(),hx=HEAD[name],head=hx?softHead(T,hx):null;
+  // each layer keeps its own container (shadowHover fades them), the soft head bends with the brush's hairs
+  ['soft','cast','contact'].forEach(k=>{const l=new PIXI.Container();addLayer(l,T[k],T,head);c.addChild(l)});
+  if(head){c.bend=head.bend;c.headLen=hx}return c}
 /* h: 0 = tip on the paper, 1 = tool lifted (the contact fades, the shadow blurs and pales) */
 export function shadowHover(sh,h){const[soft,cast,ct]=sh.children;if(!ct)return;sh.alpha=1;cast.alpha=1-h;soft.alpha=.2+.8*h;ct.alpha=Math.pow(1-h,3)}
+/* tools with a soft head: where it meets the rigid part (the brush's hairs end in the ferrule) */
+const HEAD={brush:60};
+/* the soft head is drawn as ropes through a few points, so it can bend. bend(ox,oy) puts the tip at (ox,oy) from
+   where it rests, in tool units (x along the tool, y across); the hairs are clamped in the ferrule, so they leave it
+   straight and bend more and more towards the tip, like a loaded cantilever. */
+function softHead(T,hx){
+  const cut=Math.round((hx+T.pad)*T.K),N=16,xs=[],pts=[];
+  for(let i=0;i<N;i++){const x=cut*i/(N-1)/T.K-T.pad;xs.push(x);pts.push(new PIXI.Point(x*T.K,0))}
+  return{cut,pts,bend:(ox,oy)=>{for(let i=0;i<N;i++){const s=clamp(xs[i]/hx,0,1),g=(1-s)*(1-s)*(2+s)/2;pts[i].x=(xs[i]+ox*g)*T.K;pts[i].y=oy*g*T.K}}}}
+/* one layer of a texture laid along the tool (tip at x=0); with a soft head, its front part is a rope */
+function addLayer(c,tex,T,head){
+  const b=tex.baseTexture,cut=head?head.cut:0,out=[];
+  if(head){const rope=new PIXI.SimpleRope(new PIXI.Texture(b,new PIXI.Rectangle(0,0,cut,b.realHeight)),head.pts,0);rope.scale.set(SS/T.K);c.addChild(rope);out.push(rope)}
+  const sp=new PIXI.Sprite(head?new PIXI.Texture(b,new PIXI.Rectangle(cut,0,b.realWidth-cut,b.realHeight)):tex);sp.scale.set(SS/T.K);sp.position.set((cut/T.K-T.pad)*SS,-T.cy*SS);c.addChild(sp);out.push(sp);
+  return out}
 export function buildTool(tool){
-  const name=TOOL_PROF[tool]||'marker',T=cylTex(name),c=new PIXI.Container(),tint=[];
-  [['plain',0],['tint',1],['over',0]].forEach(([k,ti])=>{if(!T[k])return;const sp=new PIXI.Sprite(T[k]);sp.scale.set(SS/T.K);sp.position.set(-T.pad*SS,-T.cy*SS);c.addChild(sp);if(ti)tint.push(sp)});
+  const name=TOOL_PROF[tool]||'marker',T=cylTex(name),c=new PIXI.Container(),tint=[],hx=HEAD[name],head=hx?softHead(T,hx):null;
+  [['plain',0],['tint',1],['over',0]].forEach(([k,ti])=>{if(!T[k])return;const o=addLayer(c,T[k],T,head);if(ti)tint.push(...o)});
+  if(head){c.bend=head.bend;c.headLen=hx}
   return{c,sh:buildShadow(name),tint};
 }

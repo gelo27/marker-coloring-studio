@@ -13,6 +13,22 @@ import {app,jarC,jarTint,liqDropAt,markHeightDirty,paperC,paperShader,penC,penSh
 import {shadowHover} from './toolSprites.js';
 /* ================= RENDER ================= */
 export const fxv=k=>S.fx[k].on&&!fxOff()?S.fx[k].v:0;
+/* the brush's hairs: the tip is a mass on a spring behind the handle. On the paper friction drags it back, so it
+   trails the stroke, swings out on turns and springs back when the brush is lifted. Replayed from the recent path
+   each frame, so a frame looks the same however it was reached (playback, seeking, export). */
+function bendHead(c,st,pw){
+  const dt=1/60,n=24,K=600;let qx=0,qy=0,vx=0,vy=0,lx=0,ly=0;
+  for(let j=n;j>=0;j--){const s=j?penState(c-j*dt):st,w=j?P2W(s.x,s.y):pw;
+    if(j===n){qx=lx=w[0];qy=ly=w[1];continue}
+    const hvx=(w[0]-lx)/dt,hvy=(w[1]-ly)/dt,ct=1-clamp((s.h||0)*8,0,1);lx=w[0];ly=w[1];
+    vx+=(K*(w[0]-qx)-ct*40*vx-(1-ct)*14*(vx-hvx))*dt;vy+=(K*(w[1]-qy)-ct*40*vy-(1-ct)*14*(vy-hvy))*dt;qx+=vx*dt;qy+=vy*dt}
+  // into the tool's own frame; the hairs bend a long way sideways but hardly stretch, and buckle a little when pushed
+  const a=-penC.rotation,cs=Math.cos(a),sn=Math.sin(a),sc=penC.scale.x*SS,ox=qx-pw[0],oy=qy-pw[1],L=penC.headLen*.5;
+  let bx=(ox*cs-oy*sn)/sc,by=(ox*sn+oy*cs)/sc;const m=Math.hypot(bx,by);if(m>1e-3){const f=L*Math.tanh(m/L)/m;bx*=f;by*=f}
+  bx=clamp(bx,-L*.12,L*.45);penC.bend(bx,by);
+  // the shadow's tip follows the same way on the paper, seen in the shadow's own (differently tilted) frame
+  if(penShadow.bend){const wx=(bx*cs+by*sn)*sc,wy=(-bx*sn+by*cs)*sc,a2=-penShadow.rotation,c2=Math.cos(a2),s2=Math.sin(a2),k2=penShadow.scale.x*SS;
+    penShadow.bend((wx*c2-wy*s2)/k2,(wx*s2+wy*c2)/k2)}}
 export function renderAt(v){
   const c=plan.cOf(v);
   paintAt(c);wetAt(c);
@@ -34,6 +50,7 @@ export function renderAt(v){
   const pp=fxv('persp'),lean=.08+.42*pp;
   penC.rotation=ang-lean*.55;penC.scale.set((1+.05*h)*(1+.06*pp),(1+.05*h));
   penShadow.position.set(pw[0]+(4+38*h)*SS,pw[1]+(6+52*h)*SS);penShadow.rotation=ang+lean*.45;penShadow.scale.set((1+.03*h)*(1-.04*pp),1+.03*h);shadowHover(penShadow,h);
+  if(penC.bend)bendHead(c,st,pw);
   runHook('render',{v,c,st,pw,h});
   const fit=viewFit()*cam.z;
   const hx=(Math.sin(v*.7)*5+Math.sin(v*1.31+1)*2.5)*SS/cam.z*(S.human?.6+2*S.hum.shake:1),hy=(Math.cos(v*.57)*5+Math.sin(v*1.13+2)*2.5)*SS/cam.z*(S.human?.6+2*S.hum.shake:1);

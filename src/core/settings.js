@@ -8,7 +8,7 @@ export const TOOLS={
   pencil:{name:'Кольорові олівці',sub:'зерниста штриховка',wMul:.6,spacing:.55,outline:true,mat:{pat:.25,relief:.15,tooth:1,toothScale:.32},wet:false,dry:0,tooth:.95,glitter:0,edge:0,lines:9,
     // a pencil does not dry: every stroke is a band of thin streaks of pigment along the motion, final at once
     st:l=>({a:Math.min(1,l.alpha*1.05),wm:1,blur:0})},
-  watercolor:{name:'Акварель',sub:'мокрі мазки, прозорі шари',wMul:1.85,spacing:.8,outline:false,mat:{pat:0,relief:.5,gran:.3,rim:.6,beer:2.5},wet:true,dry:0,stamps:true,tooth:.12,glitter:0,edge:1,scribble:false,
+  watercolor:{name:'Акварель',sub:'мокрі мазки, прозорі шари',wMul:1.85,spacing:.8,outline:false,mat:{pat:0,relief:.5,gran:.3,rim:.6,beer:2.5},matGL:{pat:0,relief:.55},wet:true,dry:0,stamps:true,tooth:.12,glitter:0,edge:1,scribble:false,
     st:(l,d)=>({a:lerp(.42,.33,d)*(l.alpha/.76),wm:lerp(1.3,1.45,d),blur:lerp(.26,.12,d)})},
   pastel:{name:'Пастель',sub:'грубий фактурний мазок',wMul:1.2,spacing:.74,outline:false,mat:{pat:.35,relief:.85,tooth:1.25,toothScale:.75,chalk:1},wet:false,dry:.8,tooth:1.25,glitter:0,edge:0,rough:true,
     st:(l,d)=>({a:lerp(.62+l.alpha*.2,.92,d),wm:1,blur:0})},

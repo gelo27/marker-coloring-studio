@@ -16,7 +16,7 @@ import {renderAt} from './render/renderer.js';
 import {app,applyFormat,applyToolUniforms,initPixi,makeProceduralPattern,paperShader,penC,seamlessFromImage,setPattern,setPatternSrc,updateDesk} from './render/scene.js';
 import {CYL_CACHE,buildTool,cylTex,shadowHover} from './render/toolSprites.js';
 import {renderAddonsUI} from './ui/addons.js';
-import {bindFly,buildFxUI,buildHumUI,buildToolUI,compactUI} from './ui/controls.js';
+import {bindFly,buildFxUI,buildHumUI,buildToolUI,buildWcUI,compactUI} from './ui/controls.js';
 import {REN,exportVideo,saveBlob,saveFrame,saveVideo} from './ui/exporter.js';
 import {bindInspector,renderPal,setSegValue,setSegValue2,updateInspector,zonesChanged} from './ui/inspector.js';
 import {setArt} from './ui/load.js';
@@ -67,6 +67,7 @@ export function boot(){
   $('frameBtn').onclick=saveFrame;
   $('duoShift').oninput=e=>{DUO.shift=+e.target.value*Math.PI/180;$('duoShiftV').textContent=e.target.value+'°';if(paperShader)paperShader.uniforms.uDuoShift=DUO.shift;if(!playing&&!ed.on&&!busy)renderAt(T)};
   $('gltDens').oninput=e=>{GLT.dens=+e.target.value;$('gltDensV').textContent=Math.round(GLT.dens*100);if(paperShader)paperShader.uniforms.uGlitDens=GLT.dens;if(!playing&&!ed.on&&!busy)renderAt(T)};
+  buildWcUI(()=>{lsSchedule();if(!busy)seek(T)});
   $('puffRel').oninput=e=>{PUFF.ns=+e.target.value;$('puffRelV').textContent=PUFF.ns;if(paperShader)paperShader.uniforms.uNS=PUFF.ns;if(!playing&&!ed.on&&!busy)renderAt(T)};
   $('puffGloss').oninput=e=>{PUFF.gloss=+e.target.value;$('puffGlossV').textContent=PUFF.gloss.toFixed(2);if(paperShader)paperShader.uniforms.uGloss=PUFF.gloss;if(!playing&&!ed.on&&!busy)renderAt(T)};
   $('sndOn').onchange=e=>{SND.on=e.target.checked;if(!SND.on)stopAudio();else if(playing){setPlaying(false);togglePlay()}$('sndBadge').textContent=SND.on?'ASMR':'вимк.'};

@@ -5,6 +5,7 @@ import {$} from '../core/utils.js';
 import {zoneByI} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
 import {renderAt} from '../render/renderer.js';
+import {WC,WC_DEF,wcClearCache} from '../render/watercolor.js';
 import {setToolSprite} from '../render/scene.js';
 import {setSegValue} from './inspector.js';
 import {T,busy,playFresh,playing,rebuild,seek,setMode,setPlaying} from './playback.js';
@@ -26,6 +27,20 @@ export function buildToolUI(){
   Object.keys(TOOLS).forEach(k=>{const T=TOOLS[k];const b=document.createElement('button');b.dataset.t=k;b.setAttribute('aria-pressed',k===S.tool);b.innerHTML='<img class="tthumb" data-tool-thumb="'+k+'" alt="" width="96" height="96"><b>'+T.name+'</b><span>'+T.sub+'</span>';
     b.onclick=()=>{if(busy)return;S.tool=k;[...el.children].forEach(x=>x.setAttribute('aria-pressed',x===b));setToolSprite();rebuild(false)};el.appendChild(b)});
 }
+/* watercolour brush: every slider re-simulates the zones, so it applies on release */
+const WC_UI=[['tuft','Фізичні волосинки'],['body','Тіло мазка (менше — помітніші волосинки)',.25,1,.01],['bend','Прогин волосинок',0,1.2,.01],['splay','Розкид пучка',.4,1.8,.01],
+  ['opacity','Насиченість фарби',.4,1.6,.01],['edge','Темна кромка мазка',0,2,.05],['cap','Темніший край біля контуру',0,2,.05],['veins','Світлі прожилки при висиханні',0,1,.05],['level','Рівність заливки',0,.6,.01],
+  ['flow','Підтьоки та розводи',0,1.5,.05],['bleed','Розмиття по мокрому',0,.6,.01],['vary','Переливи відтінків',0,1,.05],['gran','Зернистість паперу',0,1.5,.05]];
+export function syncWcUI(){WC_UI.forEach(([k,,mn])=>{const e=$('wc_'+k);if(!e)return;if(mn===undefined)e.checked=WC[k]>0;else{e.value=WC[k];$('wc_'+k+'V').textContent=(+WC[k]).toFixed(2)}})}
+export function buildWcUI(onChange){
+  const box=$('wcBox');if(!box)return;
+  box.innerHTML=WC_UI.map(([k,l,mn,mx,st])=>mn===undefined?'<label class="switch"><input type="checkbox" id="wc_'+k+'"> '+l+'</label>'
+    :'<div class="row"><label for="wc_'+k+'">'+l+'</label><span class="val" id="wc_'+k+'V"></span></div><input type="range" id="wc_'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'">').join('')
+    +'<div class="btns"><button class="btn small" id="wcReset">Скинути акварель</button></div><p class="hint">Налаштування акварельної кисті. Зміна перераховує всі акварельні зони, тож застосовується, коли відпустите повзунок.</p>';
+  const apply=()=>{wcClearCache();onChange()};
+  WC_UI.forEach(([k,,mn])=>{const e=$('wc_'+k);if(mn===undefined){e.onchange=()=>{WC[k]=e.checked?1:0;apply()};return}
+    e.oninput=()=>{$('wc_'+k+'V').textContent=(+e.value).toFixed(2)};e.onchange=()=>{WC[k]=+e.value;apply()}});
+  $('wcReset').onclick=()=>{Object.assign(WC,WC_DEF);syncWcUI();apply()};syncWcUI()}
 export function renderFlyList(){
   const el=$('flyList');if(!el||!plan)return;el.innerHTML='';
   $('flyBadge').textContent=FLY.mode==='off'?'вимк.':FLY.segs&&FLY.segs.length?'власні':'авто';

@@ -7,6 +7,7 @@ import {seg} from '../core/zones.js';
 import {GL,glueGeo} from './glitter.js';
 import {fluidLayer} from './liquid.js';
 import {app,emptyTex,paperShader} from './scene.js';
+import {wcFree,wcGL,wcLayer} from './watercolor.js';
 /* ================= PAINT ================= */
 export let colorCv,colorCtx,colorTex,colorDirty=false,cursor=0;
 export let tmpCv=mk(4,4),tmpCtx=tmpCv.getContext('2d');
@@ -35,7 +36,7 @@ export let settledCv,settledCtx,dynamic=[];
 export function resetPaint(){
   colorCtx.clearRect(0,0,colorCv.width,colorCv.height);settledCtx.clearRect(0,0,settledCv.width,settledCv.height);colorDirty=true;fullUpload=true;cursor=0;dynamic=[];
   if(matCtx){matCtx.clearRect(0,0,matCv.width,matCv.height);matDirty=true}if(glitCtx){glitCtx.clearRect(0,0,glitCv.width,glitCv.height);glitDirty=true}
-  if(plan)plan.order.forEach(r=>{r.cv=null;r.cvx=null;r.done=0;r.dd=0;r.gs=0;r.gd=0;r.fl=null});
+  if(plan)plan.order.forEach(r=>{wcFree(r);r.cv=null;r.cvx=null;r.done=0;r.dd=0;r.gs=0;r.gd=0;r.fl=null});
   wetSlots.forEach(s=>{s.k=-1});
 }
 export function strokeLeg(ctx,l,r,f,col,alphaMul){
@@ -121,7 +122,7 @@ export function ensureTmp(w,h){if(tmpCv.width<w||tmpCv.height<h){tmpCv.width=Mat
    settle into a wider, near-opaque version, so marker streaks fade instead of staying. Returns true once fully dry. */
 export function regionLayer(r,c){
   if(TOOLS[r.tool||S.tool].fluid)return fluidLayer(r,c);
-  if(TOOLS[r.tool||S.tool].stamps)return wcRegion(r,c);
+  if(TOOLS[r.tool||S.tool].stamps)return wcGL()?wcLayer(r,c):wcRegion(r,c);
   const T=TOOLS[r.tool||S.tool],D=T.dry,mask0=regionMask(r),mask=T.thick?r.tightCv:mask0,SD=r.dur*(r.sf||1);
   if(!r.cv){r.cv=mk(r.bw,r.bh);r.cvx=r.cv.getContext('2d');r.done=0}
   const p=clamp((c-r.t0)/SD,0,1),cur=p>=1?{k:r.legs.length,f:0}:legAt(r,p);
