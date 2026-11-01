@@ -33,7 +33,7 @@ export function renderAt(v){
   const c=plan.cOf(v);
   paintAt(c);wetAt(c);
   if(flushPaint())markHeightDirty();
-  paperShader.uniforms.uFlat=0;paperShader.uniforms.uPxS=viewFit()*cam.z*SS;
+  paperShader.uniforms.uFlat=0;paperShader.uniforms.uPxS=viewFit()*cam.z*SS;paperShader.uniforms.uLineFit=viewFit()*cam.z;
   if(plan.hasThick)renderHeight();
   paperShader.uniforms.uSelOn=0;paperShader.uniforms.uTime=v;inkUniforms(c);
   {const dv=cam.rv==null?0:clamp(v-cam.rv,0,.1),fz=viewFit()*cam.z;const dz=cam.rz==null||dv<=0?0:Math.abs(cam.z-cam.rz)/dv;

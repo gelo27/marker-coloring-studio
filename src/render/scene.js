@@ -8,10 +8,11 @@ import {liqPenColor} from './liquid.js';
 import {colorTex,cursor,glitTex,initSurfaces,matTex} from './paint.js';
 import {DESK_FRAG,PAPER_FRAG,POST_FRAG,VERT} from './shaders.js';
 import {CYL_PROF,buildTool,cylTex} from './toolSprites.js';
+import {SD_RANGE,lineSdf} from './lineSdf.js';
 import {wcGL} from './watercolor.js';
 export let PATTERN_SRC=null; // custom pattern (data URL); null → procedural default
 /* ================= PIXI SCENE ================= */
-export let app,world,post,postMesh,postShader,sceneRT,paperMesh,paperShader,deskMesh,penC,penTint=[],penShadow,sparkG,lineTex,patTex,emptyTex,selCv,selCtx,selTex;
+export let app,world,post,postMesh,postShader,sceneRT,paperMesh,paperShader,deskMesh,penC,penTint=[],penShadow,sparkG,lineTex,lineSdTex,patTex,emptyTex,selCv,selCtx,selTex;
 export function quad(x0,y0,x1,y1){return new PIXI.Geometry().addAttribute('aVertexPosition',[x0,y0,x1,y0,x1,y1,x0,y1],2).addAttribute('aUvs',[0,0,1,0,1,1,0,1],2).addIndex([0,1,2,0,2,3])}
 export function makeSparkle(){const gr=new PIXI.Graphics();gr.beginFill(0xFFFFFF);const r=30*SS,ri=5*SS;gr.moveTo(0,-r);gr.quadraticCurveTo(ri,-ri,r,0);gr.quadraticCurveTo(ri,ri,0,r);gr.quadraticCurveTo(-ri,ri,-r,0);gr.quadraticCurveTo(-ri,-ri,0,-r);gr.endFill();return gr}
 /* procedural seamless pattern (default) */
@@ -60,10 +61,12 @@ export function buildScene(){
   const sh=new PIXI.Graphics();sh.beginFill(0x20302a,.35);sh.drawRect(10*SS,16*SS,W,H);sh.endFill();sh.filters=[new PIXI.BlurFilter(26*SS,4)];paperC.addChild(sh);
   if(!paramTex)paramTex=buildParamTex();
   initSurfaces(W,H);
-  if(lineTex)lineTex.destroy(true);if(selTex)selTex.destroy(true);
+  if(lineTex)lineTex.destroy(true);if(lineSdTex)lineSdTex.destroy(true);if(selTex)selTex.destroy(true);
   lineTex=PIXI.Texture.from(seg.lineTexCv);lineTex.baseTexture.mipmap=PIXI.MIPMAP_MODES.ON;
+  // the lines' distance field keeps their edges crisp in close-ups
+  lineSdTex=PIXI.Texture.from(seg.lineTexCv.sd||(seg.lineTexCv.sd=lineSdf(seg.lineTexCv)));lineSdTex.baseTexture.mipmap=PIXI.MIPMAP_MODES.OFF;lineSdTex.baseTexture.scaleMode=PIXI.SCALE_MODES.LINEAR;
   selCv=mk(W>>1,H>>1);selCtx=selCv.getContext('2d');selTex=PIXI.Texture.from(selCv);
-  paperShader=PIXI.Shader.from(VERT,PAPER_FRAG,{uColor:colorTex,uLine:lineTex,uPattern:patTex,uSel:selTex,uSelOn:0,uTime:0,uWet0:emptyTex,uWet1:emptyTex,uWetRect0:[0,0,0,0],uWetRect1:[0,0,0,0],uWetStr:0,uTexel:[1/W,1/H],uRelief:0,uCamPhase:0,uNS:7.5,uGloss:1,uHeight:emptyTex,uMat:matTex,uParams:paramTex,uGlit:glitTex,uDefMat:0,uFlat:0,uPxS:1,uCamV:0,uDuoShift:DUO.shift,uGlitDens:GLT.dens,uPatStr:U.patStr,uPatScale:U.patScale,uGrain:U.grain,uShine:-1,uSS:SS,uInk:emptyTex,uInkP:2,uInkW:.01});
+  paperShader=PIXI.Shader.from(VERT,PAPER_FRAG,{uColor:colorTex,uLine:lineTex,uLineSD:lineSdTex,uLineFit:0,uSdR:SD_RANGE,uPattern:patTex,uSel:selTex,uSelOn:0,uTime:0,uWet0:emptyTex,uWet1:emptyTex,uWetRect0:[0,0,0,0],uWetRect1:[0,0,0,0],uWetStr:0,uTexel:[1/W,1/H],uRelief:0,uCamPhase:0,uNS:7.5,uGloss:1,uHeight:emptyTex,uMat:matTex,uParams:paramTex,uGlit:glitTex,uDefMat:0,uFlat:0,uPxS:1,uCamV:0,uDuoShift:DUO.shift,uGlitDens:GLT.dens,uPatStr:U.patStr,uPatScale:U.patScale,uGrain:U.grain,uShine:-1,uSS:SS,uInk:emptyTex,uInkP:2,uInkW:.01});
   paperMesh=new PIXI.Mesh(quad(0,0,W,H),paperShader);paperC.addChild(paperMesh);
   if(heightRT){heightRT.destroy(true);heightRT=null}
   heightRT=PIXI.RenderTexture.create({width:Math.ceil(W/2),height:Math.ceil(H/2)});
