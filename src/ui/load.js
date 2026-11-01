@@ -2,7 +2,7 @@ import {replan} from '../core/plan.js';
 import {analyze} from '../core/segment.js';
 import {FLY,IMP} from '../core/settings.js';
 import {$} from '../core/utils.js';
-import {applySrcColors,art,customOrder,initZones,orderMode,palette,seg,setArtDoc,setCustomOrder,setPalette,setSeg,zones} from '../core/zones.js';
+import {applyPalette,applySrcColors,art,customOrder,initZones,orderMode,palette,seg,setArtDoc,setCustomOrder,setPalette,setSeg,zones} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
 import {buildScene,buildSparkles} from '../render/scene.js';
 import {renderFlyList} from './controls.js';
@@ -11,10 +11,16 @@ import {drawMarks,seek,setMode,setPlayIcon,setPlaying,setT} from './playback.js'
 import {lsSchedule} from './project.js';
 import {syncWizard} from './wizard.js';
 /* ================= LOAD ================= */
+/* the palette is the user's set of markers once they have changed it (or a project brought one): a new page keeps it
+   and is coloured from it, instead of starting again from the default palette. A page with its own colours (a coloured
+   picture taken with its colours, the demo) still brings those. */
+export let palUser=false;
+export function setPalUser(v){palUser=!!v}
 export function setArt(a,openEditor,after){
+  const userPal=palUser&&palette.length?palette.slice():null;
   setArtDoc(a);$('overlay').hidden=false;$('overlay').textContent='Розбиваю сторінку на зони…';setPlaying(false);setPlayIcon();
   setTimeout(()=>{
-    setSeg(analyze(art));initZones();let imp=null;if(art.colored&&IMP.useColors)imp=applySrcColors(art.srcCv);FLY.segs=null;setCustomOrder(null,'auto');ed.seq=null;$('orderPreset').value='auto';$('orderBadge').textContent='авто';$('seqBtn').textContent='Задати кліками';$('seqBtn').classList.remove('active');ed.sel.clear();buildScene();
+    setSeg(analyze(art));initZones();let imp=null;if(art.colored&&IMP.useColors)imp=applySrcColors(art.srcCv);else if(userPal&&!art.demo){setPalette(userPal);applyPalette(1)}FLY.segs=null;setCustomOrder(null,'auto');ed.seq=null;$('orderPreset').value='auto';$('orderBadge').textContent='авто';$('seqBtn').textContent='Задати кліками';$('seqBtn').classList.remove('active');ed.sel.clear();buildScene();
     replan();buildSparkles();setT(0);
     renderPal('palette',true);renderOrderList();renderFlyList();
     $('overlay').hidden=true;
@@ -31,7 +37,7 @@ export function resegment(after){
   const oldLab=seg.lab,oldBy=new Map(zones.map(z=>[z.i,z])),oldOrder=customOrder,oldMode=orderMode,oldPal=palette.slice(),oW=seg.W,oH=seg.H;
   $('overlay').hidden=false;$('overlay').textContent='Перераховую зони…';setPlaying(false);setPlayIcon();
   setTimeout(()=>{
-    setSeg(analyze(art));initZones();if(art.colored&&IMP.useColors)applySrcColors(art.srcCv);else setPalette(oldPal);
+    setSeg(analyze(art));initZones();if(art.colored&&IMP.useColors)applySrcColors(art.srcCv);setPalette(oldPal);
     const from=new Map(),kx=oW/seg.W,ky=oH/seg.H;  // the traced outline may have changed the page's resolution
     zones.forEach(z=>{const r=z.r,cnt=new Map(),st=Math.max(1,Math.round(Math.sqrt(r.area)/40));
       for(let y=r.y0;y<=r.y1;y+=st)for(let x=r.x0;x<=r.x1;x+=st){const p=y*seg.W+x;if(seg.lab[p]!==r.i)continue;const o=oldLab[Math.min(oH-1,(y*ky)|0)*oW+Math.min(oW-1,(x*kx)|0)];if(o)cnt.set(o,(cnt.get(o)||0)+1)}

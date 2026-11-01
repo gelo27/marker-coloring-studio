@@ -16,7 +16,7 @@ import {PATTERN_SRC,applyFormat,makeProceduralPattern,setPattern,setPatternSrc,s
 import {renderAddonsUI} from './addons.js';
 import {buildFxUI,syncAirUI,syncSnowUI,syncWcUI} from './controls.js';
 import {renderPal,setSegValue,updateInspector} from './inspector.js';
-import {setArt} from './load.js';
+import {setArt,setPalUser} from './load.js';
 import {T,busy,playing,rebuild,setPlayIcon,setPlaying} from './playback.js';
 import {syncSound} from './sound.js';
 /* ================= PROJECT (JSON + browser storage) ================= */
@@ -90,7 +90,7 @@ export async function applyProject(d){
   await new Promise(res=>setArt(a,false,()=>{
     if(refIm){applySrcColors(refIm);art.refURL=d.art.ref}
     (d.zones||[]).forEach(q=>{const z=zoneByI.get(q.i);if(!z)return;['color','skip','close','zoom','speed','tmul','vshade','tool','style','preset','fill'].forEach(k=>{if(q[k]!==undefined)z[k]=q[k]});if(z.tool&&!TOOLS[z.tool])z.tool='';if(q.flat)z.flat=true});
-    if(d.palette&&d.palette.length)setPalette(d.palette.slice());
+    if(Array.isArray(d.palette)){setPalette(d.palette.slice());setPalUser(true)}
     if(d.order){setCustomOrder(d.order.custom||null,d.order.mode||'auto');$('orderPreset').value=orderMode;$('orderBadge').textContent=orderMode==='auto'?'авто':orderMode==='custom'?'власний':$('orderPreset').selectedOptions[0].textContent.toLowerCase()}
     if(d.FLY)FLY.segs=d.FLY.segs||null;
     setToolSprite();renderPal('palette',true);ed.dirtyPaint=true;rebuild(false);updateInspector();res()}));

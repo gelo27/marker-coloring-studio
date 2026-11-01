@@ -4,9 +4,9 @@ import {$} from '../core/utils.js';
 import {applyPalette,art,nextPalSeed,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setCustomOrder,setZoneColor,zClose,zFast,zZoom,zoneByI,zones} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
 import {applyToolUniforms} from '../render/scene.js';
-import {resegment} from './load.js';
+import {resegment,setPalUser} from './load.js';
 import {busy,rebuild,setMode} from './playback.js';
-import {lsSchedule} from './project.js';
+import {lsArm,lsSchedule} from './project.js';
 import {syncOrderUI,syncWizard,syncWizardSel} from './wizard.js';
 export function setOrder(ids,mode){setCustomOrder(ids,mode);$('orderPreset').value=mode;syncOrderUI();$('orderBadge').textContent=mode==='auto'?'авто':mode==='custom'?'власний':$('orderPreset').selectedOptions[0].textContent.toLowerCase();zonesChanged(ed.view==='order')}
 /* ================= INSPECTOR & PALETTE UI ================= */
@@ -82,7 +82,9 @@ export function updateInspector(){
 
   renderPal('zPal',false);
 }
-export function addToPalette(c){c=c.toLowerCase();if(!palette.some(p=>p.toLowerCase()===c))palette.push(c);renderPal('palette',true);renderPal('zPal',false);lsSchedule()}
+export function addToPalette(c){c=c.toLowerCase();if(!palette.some(p=>p.toLowerCase()===c))palette.push(c);palChanged()}
+/* the palette was edited by hand: it is the user's now (kept for the next page), shown everywhere, and saved */
+function palChanged(){setPalUser(true);renderPal('palette',true);renderPal('zPal',false);syncWizard();lsArm();lsSchedule()}
 /* a palette swatch; c=null is the "do not paint" swatch (white circle, red cross) */
 export function makeSwatch(c,on){const b=document.createElement('button');b.className='sw'+(c?'':' nop')+(on?' on':'');
   if(c){b.style.background=c;b.title=c;b.setAttribute('aria-label','Колір '+c)}else{b.title='Не замальовувати';b.setAttribute('aria-label','Не замальовувати зону')}return b}
@@ -90,7 +92,7 @@ export function renderPal(id,editable){
   const el=$(id);el.innerHTML='';const cur=selZones()[0];
   const np=makeSwatch(null,!!(cur&&cur.skip));np.onclick=()=>{const sel=selZones();if(sel.length){sel.forEach(z=>z.skip=true);zonesChanged(true)}};el.appendChild(np);
   palette.forEach((c,k)=>{const b=makeSwatch(c,!!(cur&&!cur.skip&&cur.color.toLowerCase()===c.toLowerCase()));
-    if(editable){const x=document.createElement('span');x.className='x';x.textContent='×';x.title='Прибрати з палітри';x.onclick=e=>{e.stopPropagation();palette.splice(k,1);renderPal('palette',true);updateInspector()};b.appendChild(x)}
+    if(editable){const x=document.createElement('span');x.className='x';x.textContent='×';x.title='Прибрати з палітри';x.onclick=e=>{e.stopPropagation();palette.splice(k,1);palChanged();updateInspector()};b.appendChild(x)}
     b.onclick=()=>{const sel=selZones();if(sel.length){sel.forEach(z=>{z.skip=false;setZoneColor(z,c)});zonesChanged(true)}else{$('newColor').value=c}};
     el.appendChild(b)});
 }
