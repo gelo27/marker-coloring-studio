@@ -5,7 +5,7 @@ export const TOOLS={
     st:(l,d)=>({a:lerp(l.alpha,.95,d),wm:lerp(1,1.34,d),blur:0})},
   copic:{name:'Спиртовий маркер',sub:'мʼякий, без смуг',wMul:1.12,spacing:.62,outline:true,mat:{pat:.2,relief:.1,beer:1.2},wet:true,dry:.9,tooth:0,glitter:0,edge:0,
     st:(l,d)=>({a:lerp(l.alpha*.68,.9,d),wm:lerp(1.12,1.38,d),blur:.07})},
-  pencil:{name:'Кольорові олівці',sub:'зерниста штриховка',wMul:.6,spacing:.55,outline:true,mat:{pat:.25,relief:.15,tooth:1,toothScale:.32},wet:false,dry:0,tooth:.95,glitter:0,edge:0,lines:9,
+  pencil:{name:'Кольорові олівці',sub:'зерниста штриховка',wMul:.6,spacing:.55,outline:true,mat:{pat:.25,relief:.15,tooth:1,toothScale:.32},matGL:{pat:0,relief:.15},wet:false,dry:0,tooth:.95,glitter:0,edge:0,lines:9,
     // a pencil does not dry: every stroke is a band of thin streaks of pigment along the motion, final at once
     st:l=>({a:Math.min(1,l.alpha*1.05),wm:1,blur:0})},
   watercolor:{name:'Акварель',sub:'мокрі мазки, прозорі шари',wMul:1.85,spacing:.8,outline:false,mat:{pat:0,relief:.5,gran:.3,rim:.6,beer:2.5},matGL:{pat:0,relief:.55},wet:true,dry:0,stamps:true,tooth:.12,glitter:0,edge:1,scribble:false,
@@ -25,11 +25,16 @@ export const TOOL_IDS=()=>Object.keys(TOOLS);
    biting into a paper grain by pressure, with tapered ends. Lengths are in brush units (size = the stroke's width);
    wMul widens the zone's strokes for the broader brushes. 'classic' is the old band of streaks. */
 const PEN_DEF={shape:'chalk',grain:'tooth',tile:200,depth:.25,hard:.8,gain:1,gamt:.6,size:20,flow:.9,spacing:.05,scatter:0,sizeJ:0,rotJ:Math.PI,follow:0,flowJ:0,roundness:1,
-  pSize:.3,pFlow:.8,taperS:20,taperE:30,taperMin:.3,streak:0,streakF:.5,speck:.25,valJ:.04,wMul:1};
+  pSize:.3,pFlow:.8,taperS:20,taperE:30,taperMin:.3,streak:0,streakF:.5,speck:.25,valJ:.04,wMul:1,opacity:1,anchor:0,aniso:0};
 export const PEN_BRUSHES=Object.fromEntries(Object.entries({
   pencilT:{name:'Pencil T.',shape:'pencil',grain:'tooth',tile:150,depth:.28,hard:.8,gain:1.1,size:10,flow:1,spacing:.05,pSize:.35,pFlow:.85,taperS:25,taperE:35,taperMin:.3,streak:.1,speck:.25},
   pencilR:{name:'Pencil R.',shape:'chalk',grain:'tooth',tile:170,depth:.28,hard:.75,gain:1.15,size:14,flow:1,spacing:.04,pSize:.45,pFlow:.7,taperS:20,taperE:40,taperMin:.35,streak:.1,speck:.3,wMul:1.2},
   brushR:{name:'Brush R.',shape:'chalk',grain:'weave',tile:150,depth:.3,hard:.75,gain:.98,size:30,flow:.95,spacing:.035,pSize:.15,pFlow:.8,taperS:20,taperE:40,taperMin:.35,streak:.3,streakF:.55,speck:.45,wMul:1.6},
+  /* a real coloured pencil: the paper's tooth stays put under every layer (the same pits stay white, fewer as the
+     pressure grows), the pits are drawn out along the stroke, the lead leaves fine lines along its way, the edges of
+     a stroke only touch the peaks, and every layer is a little transparent, so hatching builds the colour up */
+  classic:{name:'Класичний',shape:'pencil',grain:'tooth',tile:65,depth:.3,hard:.55,gamt:.7,gain:.86,size:10,flow:.88,spacing:.04,follow:1,rotJ:.03,
+    pSize:.25,pFlow:.7,taperS:30,taperE:45,taperMin:.25,streak:.25,streakF:2.2,speck:.12,valJ:.03,opacity:.6,anchor:1,aniso:.3},
   shaggy:{name:'Shaggy',shape:'shaggy',grain:'tooth',tile:200,depth:.32,hard:.65,gain:1.1,size:30,flow:.95,spacing:.03,sizeJ:.2,scatter:.03,pSize:.2,pFlow:.6,taperS:15,taperE:25,taperMin:.5,streak:.2,speck:.3,wMul:1.6}
 }).map(([k,b])=>[k,Object.assign({id:k},PEN_DEF,b)]));
 export const PEN_LIST=[['pencilT','Pencil T.'],['pencilR','Pencil R.'],['brushR','Brush R.'],['shaggy','Shaggy'],['classic','Класичний']];

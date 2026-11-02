@@ -287,7 +287,7 @@ export function buildPath(r,H,seed){
   const T=TOOLS[r.tool||S.tool];const w=r.w=clamp(Math.sqrt(r.lk>=0&&r.pArea?r.pArea:r.area)*.085,9*SS,STROKE.reach>0||S.wideBig===false?17*SS:34*SS)*T.wMul*(T.lines?penWMul():1);
   const base=r.elong>.25?r.ang:-.62;
   const dir=base+(rnd()-.5)*(.35+H.dirVar*1.3);
-  const legs=[],P=H.pressure;
+  const legs=[],P=H.pressure;r.hp=H.on?P:0;
   const small=r.area<Math.pow(30*SS,2);
   const alpha=()=>H.on?clamp(.76+(rnd()-.5)*.26*P,.55,.92):.74+rnd()*.08;
   const wm=()=>H.on?1+(rnd()-.5)*.24*P:1;
