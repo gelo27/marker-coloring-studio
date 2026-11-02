@@ -3,7 +3,7 @@ import {FLQ,FLY,HP,INK,OUT,S,SHADE,TOOLS,VS,VS_DIRS,view,zoneH,zoneTool} from '.
 import {inkPlan} from './inking.js';
 import {STROKE,buildPath} from './strokes.js';
 import {SS,TAU,clamp,ease3,hex2hsl,hsl2hex,lerp,rngOf} from './utils.js';
-import {art,customOrder,orderedZones,pageArea,seg,syncLk,zClose,zCut,zFast,zZoom,zoneByI,zoneTone,zones} from './zones.js';
+import {art,colorGroups,customOrder,orderedZones,pageArea,seg,syncLk,zClose,zCut,zFast,zZoom,zoneByI,zoneTone,zones} from './zones.js';
 import {clampCenter} from '../render/camera.js';
 /* ================= PLAN (schedule, shots, time warp) ================= */
 export let plan=null,planDirty=true;
@@ -93,11 +93,15 @@ export function makePlan(){
   const fin=S.camMode==='cat'&&addonHasFocus()?7:0,outro=fin+(!fly.length?4.8:FLY.mode==='after'?REVEAL+flyT+.2:.5+flyT+REVEAL);
   // free painters help with big zones: those are cut into pieces (runs of whole reach patches) that anyone can take
   if(par&&PN.help&&STROKE.reach>0){order=splitForHelp(order,PN.n,PACE?PACE*8:0);order.forEach((r,k)=>r.k=k)}
+  // the marker each zone is coloured with (close shades share one)
+  const mkOf=new Map();if(human&&!PACE)colorGroups(list).forEach(g=>g.zs.forEach(z=>mkOf.set(z.i,g.color)));
   // walking from one zone to the next: a quick hand move, or a painter's walk at its own speed
   const trvOf=(e,s)=>{if(!e)return .25;const d=Math.hypot(e[0]-s[0],e[1]-s[1]);return(PACE?clamp(.25+d/(WALK*Math.min(1.47,1+d/(4*WALK/.95))),.25,8):clamp(.12+d/(5200*SS/2),.12,.5))+(human?.04+rnd()*.18*(.4+H.pauses*1.5):0)};
   order.forEach((r,k)=>{r.raw=(PACE?r.pathW/PACE:.12+.55*Math.pow(r.pathW/(1000*SS),.72))*(TOOLS[r.tool].fluid?1.8:1);if(TOOLS[r.tool].glue){const spr=2+3.4*Math.sqrt(r.area/pageArea());r.sf=r.raw/(r.raw+spr);r.raw+=spr}else r.sf=1;r.raw*=clamp((zoneByI.get(r.i)||{}).tmul||1,.15,8);
     r.turnTo=undefined;
-    if(k>0){const p=order[k-1];r.trRaw=trvOf(p.legs[p.legs.length-1].p1,r.legs[0].p0)}else r.trRaw=0;
+    if(k>0){const p=order[k-1];r.trRaw=trvOf(p.legs[p.legs.length-1].p1,r.legs[0].p0);
+      // a person puts one marker down and picks up the next: the move to a new colour takes a moment longer
+      if(human&&!PACE&&!r.layerOf&&!r.shadowOf&&mkOf.get(r.i)!==mkOf.get(p.i))r.trRaw+=.3+rnd()*.25}else r.trRaw=0;
     // montage cut: the zone takes no screen time, it is simply finished when the next shot starts
     if(r.instant){r.raw=0;r.trRaw=0}});
   if(human&&H.turn>0){let ang=0,cool=0;const nat=-.62;

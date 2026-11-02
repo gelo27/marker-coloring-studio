@@ -85,30 +85,49 @@ function markerOf(){const reps=[],m=new Map();
 /* groups (markers) in the order they appear in a zone list */
 export function colorGroups(list){const mk=markerOf(),m=new Map();(list||orderedZones()).forEach(z=>{const c=mk.get(z)||z.color,k=c.toLowerCase();if(!m.has(k))m.set(k,{color:c,zs:[]});m.get(k).zs.push(z)});return[...m.values()]}
 export const GROUP_RULES={light:'Від світлих до темних',dark:'Від темних до світлих',top:'Зверху вниз',big:'Більші групи спершу',count:'Де більше зон — спершу'};
-/* order by colour groups, the way a hand works: one marker colours the zones of its colour that lie together, then
-   the next marker is picked up near where the hand is. Every colour is split into local clusters (zones of that colour
-   with small gaps between them); the next cluster is the one closest to the pen, with the rule (light to dark, top
-   down...) as a gentle preference and a small bonus for carrying on with the same marker. Background last. */
+/* how far the pen is from a zone (0 inside its box) and the gap between two zones' boxes */
+const ptGap=(p,r)=>Math.hypot(Math.max(0,r.x0-p.x,p.x-r.x1),Math.max(0,r.y0-p.y,p.y-r.y1));
+const boxGap=(a,b)=>Math.hypot(Math.max(0,a.x0-b.x1,b.x0-a.x1),Math.max(0,a.y0-b.y1,b.y0-a.y1));
+/* the hand's way through the zones of one marker: it starts at the zone nearest the pen, always goes on to the nearest
+   unpainted one (by the gap between them, so a neighbour across a thin line counts as next door), and the path is then
+   untangled (2-opt): a nearest-neighbour walk leaves stragglers that it fetches with long jumps back across the page */
+export function routeZones(zs,start){
+  if(zs.length<2)return zs.slice();
+  const n=zs.length,rest=zs.slice(),o=[];let p=start||{x:0,y:0},prev=null;
+  while(rest.length){let bi=0,bd=1e18;rest.forEach((z,k)=>{const d=(prev?boxGap(prev.r,z.r):ptGap(p,z.r))+.25*Math.hypot(z.r.cx-p.x,z.r.cy-p.y);if(d<bd){bd=d;bi=k}});
+    prev=rest.splice(bi,1)[0];o.push(prev);p={x:prev.r.cx,y:prev.r.cy}}
+  const dist=(a,b)=>boxGap(a.r,b.r)+.25*Math.hypot(a.r.cx-b.r.cx,a.r.cy-b.r.cy);
+  // the first zone stays (it is where the pen is), the end is free
+  for(let pass=0,better=true;better&&pass<40;pass++){better=false;
+    for(let i=0;i<n-2;i++)for(let j=i+2;j<n;j++){const a=o[i],b=o[i+1],c=o[j],d=j+1<n?o[j+1]:null;
+      const was=dist(a,b)+(d?dist(c,d):0),now=dist(a,c)+(d?dist(b,d):0);
+      if(now<was-1e-6){for(let x=i+1,y=j;x<y;x++,y--){const t=o[x];o[x]=o[y];o[y]=t}better=true}}}
+  return o}
+/* order by colour groups, the way a person colours a page: picks up one marker, colours every zone of that colour
+   (walking the shortest way between them), puts it down and takes the next one. A marker is picked up once. The rule
+   (light to dark, top down...) sets the queue of markers; the hand may take one of the next few markers out of turn
+   when it starts much closer to where the pen is, the way you reach for the colour of the part right under your hand.
+   Background last. */
 export function groupedOrder(rule){
-  const bg=zones.filter(z=>z.r.isBg),gs=colorGroups(zones.filter(z=>!z.r.isBg));if(!gs.length)return nnPath(bg,null).map(z=>z.i);
-  const D=Math.hypot(seg.W,seg.H),T=.07*D,area=g=>g.zs.reduce((a,z)=>a+z.r.area,0),top=g=>Math.min(...g.zs.map(z=>z.r.cy));
+  const bg=zones.filter(z=>z.r.isBg),gs=colorGroups(zones.filter(z=>!z.r.isBg));if(!gs.length)return routeZones(bg,null).map(z=>z.i);
+  const D=Math.hypot(seg.W,seg.H),area=g=>g.zs.reduce((a,z)=>a+z.r.area,0),top=g=>Math.min(...g.zs.map(z=>z.r.cy));
   const key={light:g=>-lumHex(g.color),dark:g=>lumHex(g.color),top,big:g=>-area(g),count:g=>-g.zs.length}[rule]||(g=>-lumHex(g.color));
   gs.sort((a,b)=>key(a)-key(b)||top(a)-top(b));
-  const gap=(a,b)=>Math.hypot(Math.max(0,a.x0-b.x1,b.x0-a.x1),Math.max(0,a.y0-b.y1,b.y0-a.y1)),units=[];
-  gs.forEach((g,gi)=>{const zs=g.zs,n=zs.length,par=zs.map((_,k)=>k),f=k=>{while(par[k]!==k)k=par[k]=par[par[k]];return k};
-    for(let a=0;a<n;a++)for(let b=a+1;b<n;b++)if(gap(zs[a].r,zs[b].r)<T)par[f(a)]=f(b);
-    const m=new Map();zs.forEach((z,k)=>{const r=f(k);if(!m.has(r))m.set(r,[]);m.get(r).push(z)});
-    m.forEach(l=>units.push({zs:l,col:g.color.toLowerCase(),rank:gs.length>1?gi/(gs.length-1):0}))});
-  const pd=(p,r)=>Math.hypot(Math.max(0,r.x0-p.x,p.x-r.x1),Math.max(0,r.y0-p.y,p.y-r.y1));
-  const out=[];let cur={x:0,y:0},col=null;
-  while(units.length){let bi=0,bc=1e18;
-    units.forEach((u,k)=>{let d=1e18;u.zs.forEach(z=>{d=Math.min(d,pd(cur,z.r))});const c=d/D+.3*u.rank-(u.col===col?.08:0);if(c<bc){bc=c;bi=k}});
-    const u=units.splice(bi,1)[0],o=nnPath(u.zs,cur),l=o[o.length-1].r;cur={x:l.cx,y:l.cy};col=u.col;out.push(...o)}
-  return out.concat(nnPath(bg,cur)).map(z=>z.i);
+  const m=markerRun(gs,true);return m.zs.concat(routeZones(bg,m.pen)).map(z=>z.i);
 }
-/* moves whole colour groups (each keeps the order of its zones); `groups` is a list of colours in the new order */
+/* zones of the markers in the given queue; with `free`, each next marker is the best of the first three still waiting:
+   its distance from the pen counts against its place in the queue (each step back in the queue costs 9% of the page).
+   The marker at the head of the queue is passed over twice at most, so no colour drifts far from its turn */
+function markerRun(gs,free){const q=gs.slice(),out=[],D=Math.hypot(seg.W,seg.H);let cur={x:0,y:0},passed=0;
+  while(q.length){let bi=0;
+    if(free&&passed<2){let bc=1e18;for(let k=0;k<Math.min(3,q.length);k++){let d=1e18;q[k].zs.forEach(z=>{d=Math.min(d,ptGap(cur,z.r))});const c=d/D+.09*k;if(c<bc){bc=c;bi=k}}}
+    passed=bi?passed+1:0;
+    const o=routeZones(q.splice(bi,1)[0].zs,cur),l=o[o.length-1].r;cur={x:l.cx,y:l.cy};out.push(...o)}
+  return{zs:out,pen:cur}}
+/* moves whole colour groups; `colors` is the list of colours in the new order (each group is walked again from
+   where the previous one ended) */
 export function orderFromGroups(colors){const gs=colorGroups(),by=new Map(gs.map(g=>[g.color.toLowerCase(),g]));
-  return colors.map(c=>by.get(c.toLowerCase())).filter(Boolean).flatMap(g=>g.zs.map(z=>z.i))}
+  return markerRun(colors.map(c=>by.get(c.toLowerCase())).filter(Boolean),false).zs.map(z=>z.i)}
 export function syncLk(z){const want=(SHADE.on&&z.tones&&!z.flat)?0:-1;if(z.r.lk!==want)z.r.lk=want}
 /* recolouring keeps the zone's own shadows and highlights: they follow the new base colour */
 export function setZoneColor(z,c){z.color=c}
