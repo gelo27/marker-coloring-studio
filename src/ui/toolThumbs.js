@@ -7,7 +7,7 @@ import {TOOL_LEN,buildTool,shadowHover} from '../render/toolSprites.js';
    Square previews of every tool, rendered from the same 3D-shaded sprites the video uses: the tool lies across a
    sheet of paper at 45°, its contact shadow under it, a few strokes of its colour next to the tip. Rendered once,
    lazily (one tool per idle moment), and cached as data URLs. */
-export const TOOL_THUMB_COLORS={marker:0xE3416F,copic:0x4F8FE0,pencil:0x3CA65A,watercolor:0x8E5BD6,pastel:0xF0A030,gel:0x20B5C0,puffy:0xFF6A93,glue:0xE8C030,chameleon:0x9B59B6,liquid:0x2A63C8};
+export const TOOL_THUMB_COLORS={marker:0xE3416F,copic:0x4F8FE0,pencil:0x3CA65A,watercolor:0x8E5BD6,gel:0x20B5C0,puffy:0xFF6A93,glue:0xE8C030,liquid:0x2A63C8};
 const THUMB={};
 export function toolThumb(t,size){
   size=size||192;const key=t+'@'+size;if(THUMB[key])return THUMB[key];

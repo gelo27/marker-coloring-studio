@@ -1,4 +1,4 @@
-import {S,TOOLS} from './settings.js';
+import {S,TOOLS,penWMul} from './settings.js';
 import {SS,TAU,clamp,lerp,mk,noiseAt,rngOf,smooth} from './utils.js';
 import {seg} from './zones.js';
 /* ================= STROKE PATHS ================= */
@@ -281,10 +281,10 @@ function walkLegs(legs){const outL=[];let prev=null;
    then steps to where the tip is going */
 function assignStands(legs,Rch){let a=null;for(const l of legs){if(l.st){a=l.st;continue}const p=l.p1;if(!a||Math.hypot(p[0]-a[0],p[1]-a[1])>Rch*.85)a=[(l.p0[0]+p[0])/2,(l.p0[1]+p[1])/2];l.st=a}}
 export function buildPath(r,H,seed){
-  const key=(r.tool||S.tool)+'|'+JSON.stringify(H)+'|'+seed+'|'+r.lk+'|'+STROKE.reach+'|'+STROKE.walkK+'|'+(S.wideBig!==false);
+  const key=(r.tool||S.tool)+'|'+JSON.stringify(H)+'|'+seed+'|'+r.lk+'|'+STROKE.reach+'|'+STROKE.walkK+'|'+(S.wideBig!==false)+'|'+(TOOLS[r.tool||S.tool].lines?penWMul():1);
   if(r.pathKey===key)return;
   const rnd=rngOf(r.i*7919+seed*31+(H.on?17:3));
-  const T=TOOLS[r.tool||S.tool];const w=r.w=clamp(Math.sqrt(r.lk>=0&&r.pArea?r.pArea:r.area)*.085,9*SS,STROKE.reach>0||S.wideBig===false?17*SS:34*SS)*T.wMul;
+  const T=TOOLS[r.tool||S.tool];const w=r.w=clamp(Math.sqrt(r.lk>=0&&r.pArea?r.pArea:r.area)*.085,9*SS,STROKE.reach>0||S.wideBig===false?17*SS:34*SS)*T.wMul*(T.lines?penWMul():1);
   const base=r.elong>.25?r.ang:-.62;
   const dir=base+(rnd()-.5)*(.35+H.dirVar*1.3);
   const legs=[],P=H.pressure;

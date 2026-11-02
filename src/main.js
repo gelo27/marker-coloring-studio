@@ -3,7 +3,7 @@ import {camCheck,catMotion,catStats,catWalks,tipJerk,underFeet} from './addons/c
 import {SND,ensureAudio,startAudio,stopAudio,wavB64} from './audio/audio.js';
 import {bumpPlanVer,plan,planDirty,viewFit} from './core/plan.js';
 import {extractLines,loadArtFromImage} from './core/segment.js';
-import {DESK,DUO,FLQ,GLT,IMP,INK,OUT,PREV,PUFF,S,SHADE,TOOLS,U,VS,isMobileUI,view} from './core/settings.js';
+import {DESK,FLQ,GLT,IMP,INK,OUT,PREV,PUFF,S,SHADE,TOOLS,U,VS,isMobileUI,view} from './core/settings.js';
 import {$,SS,clamp,durLabel,mk} from './core/utils.js';
 import {DEFAULT_PALETTES,applyPalette,applySrcColors,art,composeColored,palSeed,seg,setPalette,zoneByI,zones} from './core/zones.js';
 import {buildDemo} from './data/demoArt.js';
@@ -16,7 +16,7 @@ import {renderAt} from './render/renderer.js';
 import {app,applyFormat,applyToolUniforms,initPixi,makeProceduralPattern,paperShader,penC,seamlessFromImage,setPattern,setPatternSrc,updateDesk} from './render/scene.js';
 import {CYL_CACHE,buildTool,cylTex,shadowHover} from './render/toolSprites.js';
 import {renderAddonsUI} from './ui/addons.js';
-import {bindFly,buildFxUI,buildHumUI,buildToolUI,buildAirUI,buildSnowUI,buildWcUI,compactUI} from './ui/controls.js';
+import {bindFly,buildFxUI,buildHumUI,buildToolUI,buildAirUI,buildPenUI,buildSnowUI,buildWcUI,compactUI} from './ui/controls.js';
 import {REN,exportVideo,saveBlob,saveFrame,saveVideo} from './ui/exporter.js';
 import {bindInspector,renderPal,setSegValue,setSegValue2,updateInspector,zonesChanged} from './ui/inspector.js';
 import {resegment,setArt} from './ui/load.js';
@@ -66,9 +66,8 @@ export function boot(){
   $('refFile').onchange=async e=>{const f=e.target.files[0];if(!f||busy||!seg)return;const url=await readURL(f),img=await loadImg(url);art.refURL=url;{const r=applySrcColors(img);renderPal('palette',true);
     $('artInfo').textContent='Кольори з картинки «'+f.name+'» застосовано до '+r.n+' зон'+(r.blank?', '+r.blank+' білих зон пропущено.':'.');if(ed.on){ed.view='final';setSegValue2('viewSeg','final')}zonesChanged(true)}};
   $('frameBtn').onclick=saveFrame;
-  $('duoShift').oninput=e=>{DUO.shift=+e.target.value*Math.PI/180;$('duoShiftV').textContent=e.target.value+'°';if(paperShader)paperShader.uniforms.uDuoShift=DUO.shift;if(!playing&&!ed.on&&!busy)renderAt(T)};
   $('gltDens').oninput=e=>{GLT.dens=+e.target.value;$('gltDensV').textContent=Math.round(GLT.dens*100);if(paperShader)paperShader.uniforms.uGlitDens=GLT.dens;if(!playing&&!ed.on&&!busy)renderAt(T)};
-  buildWcUI(()=>{lsSchedule();if(!busy)seek(T)});
+  buildPenUI();buildWcUI(()=>{lsSchedule();if(!busy)seek(T)});
   buildSnowUI(()=>lsSchedule());buildAirUI(()=>lsSchedule());
   $('puffRel').oninput=e=>{PUFF.ns=+e.target.value;$('puffRelV').textContent=PUFF.ns;if(paperShader)paperShader.uniforms.uNS=PUFF.ns;if(!playing&&!ed.on&&!busy)renderAt(T)};
   $('puffGloss').oninput=e=>{PUFF.gloss=+e.target.value;$('puffGlossV').textContent=PUFF.gloss.toFixed(2);if(paperShader)paperShader.uniforms.uGloss=PUFF.gloss;if(!playing&&!ed.on&&!busy)renderAt(T)};

@@ -100,7 +100,7 @@ export function liqDropAt(c,st){
 export function setToolSprite(){Object.keys(SPR).forEach(k=>{const s=SPR[k];[s.c,s.sh].forEach(o=>{if(o.parent)o.parent.removeChild(o);o.destroy({children:true})});delete SPR[k]});penC=null;sprTool=null;useSprite(S.tool);buildJar();applyToolUniforms()}
 export function usesTool(t){return S.tool===t||zones.some(z=>z.tool===t)}
 export function applyToolUniforms(){if(!paperShader)return;const m=TOOLS[S.tool].mat,u=paperShader.uniforms;u.uRelief=m.relief||0;u.uDefMat=TOOL_IDS().indexOf(S.tool);u.uNS=PUFF.ns;u.uGloss=PUFF.gloss;u.uDuoShift=DUO.shift;u.uGlitDens=GLT.dens;
-  [['wcBox','watercolor'],['puffBox','puffy'],['duoBox','chameleon'],['glueBox','glue'],['liqBox','liquid']].forEach(([id,t])=>{const e=document.getElementById(id);if(e)e.hidden=!usesTool(t)})}
+  [['penBox','pencil'],['wcBox','watercolor'],['puffBox','puffy'],['glueBox','glue'],['liqBox','liquid']].forEach(([id,t])=>{const e=document.getElementById(id);if(e)e.hidden=!usesTool(t)})}
 export function buildParamTex(){const ids=TOOL_IDS(),d={data:new Uint8Array(16*3*4)};
   ids.forEach((k,i)=>{const m=TOOLS[k].matGL&&wcGL()?TOOLS[k].matGL:TOOLS[k].mat,rows=[[m.pat||0,m.tooth||0,(m.toothScale||1)/2,m.gran||0],[m.rim||0,m.beer||0,m.chalk||0,m.spray||0],[m.glitter||0,m.thick||0,m.glue||0,m.duo||0]];
     rows.forEach((v,y)=>v.forEach((val,c)=>{d.data[(y*16+i)*4+c]=Math.round(clamp(val/2,0,1)*255)}))});

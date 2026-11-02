@@ -6,6 +6,7 @@ import {SS,TAU,clamp,mk,noiseAt,rngOf,smooth,vnoise} from '../core/utils.js';
 import {seg} from '../core/zones.js';
 import {GL,glueGeo} from './glitter.js';
 import {fluidLayer} from './liquid.js';
+import {penBrush,penDraw} from './pencil.js';
 import {app,emptyTex,paperShader} from './scene.js';
 import {wcFree,wcGL,wcLayer} from './watercolor.js';
 /* ================= PAINT ================= */
@@ -127,6 +128,13 @@ export function regionLayer(r,c){
   if(!r.cv){r.cv=mk(r.bw,r.bh);r.cvx=r.cv.getContext('2d');r.done=0}
   const p=clamp((c-r.t0)/SD,0,1),cur=p>=1?{k:r.legs.length,f:0}:legAt(r,p);
   const te=i=>r.t0+SD*r.legs[i].f1;
+  // pencil brushes: the finished legs go into the zone's canvas in one GPU pass, the leg being drawn over a copy of it
+  const B=T.lines&&penBrush();
+  if(B){const fin=[];while(r.done<cur.k)fin.push([r.legs[r.done++],1]);if(fin.length)penDraw(r.cvx,r,fin,B);
+    ensureTmp(r.bw,r.bh);tmpCtx.clearRect(0,0,r.bw,r.bh);tmpCtx.drawImage(r.cv,0,0);
+    if(cur.k<r.legs.length&&cur.f>0)penDraw(tmpCtx,r,[[r.legs[cur.k],cur.f]],B);
+    tmpCtx.globalCompositeOperation='destination-in';tmpCtx.drawImage(mask,0,0);tmpCtx.globalCompositeOperation='source-over';
+    return r.done>=r.legs.length}
   while(r.done<cur.k&&(D<=0||te(r.done)<=c-D)){drawLeg(r.cvx,r.legs[r.done],r,1,T.st(r.legs[r.done],1));r.done++}
   ensureTmp(r.bw,r.bh);tmpCtx.clearRect(0,0,r.bw,r.bh);tmpCtx.drawImage(r.cv,0,0);
   for(let i=r.done;i<cur.k;i++){const d=D>0?smooth(clamp((c-te(i))/D,0,1)):1;drawLeg(tmpCtx,r.legs[i],r,1,T.st(r.legs[i],d))}

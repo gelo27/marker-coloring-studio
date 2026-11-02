@@ -20,11 +20,10 @@ export const CUR={body:1,grain:1,reso:1,ref:0};
 const mix=(B,G,Q)=>{CUR.ref=B+G+Q;return B*CUR.body+G*CUR.grain+Q*CUR.reso};
 export const SND_PART_DEF={vol:1,tone:1,body:1,grain:1,reso:1,squeak:1,events:1,taps:1};
 /* which parts a tool has, with their names; 'squeak' = the short squeaks of a felt/rubber tip */
-export const SND_META={marker:{squeak:true},chameleon:{squeak:true},copic:{squeak:true},pencil:{grain:'Тріск грифеля'},watercolor:{reso:'Краплі й плюскіт'},
-  pastel:{grain:'Тріск пастелі'},gel:{grain:'Шкрябання кульки',reso:'Булькання',squeak:true},puffy:{reso:'Чвакання фарби',squeak:true},glue:{reso:'Чвакання клею',squeak:true},
+export const SND_META={marker:{squeak:true},copic:{squeak:true},pencil:{grain:'Тріск грифеля'},watercolor:{reso:'Краплі й плюскіт'},
+  gel:{grain:'Шкрябання кульки',reso:'Булькання',squeak:true},puffy:{reso:'Чвакання фарби',squeak:true},glue:{reso:'Чвакання клею',squeak:true},
   liquid:{grain:'Чвакання',reso:'Булькання'}};
 export const SND_TOOLS={
-  chameleon:null,
   marker:{att:.006,rel:.03,tap:{f:190,dec:.016,click:.55,amt:.5},
     init(r){return{a:new BQ('bp',2500,.8),b:new BQ('bp',5200,1.1),sq:new BQ('bp',1900,26),sqf:1500+r()*900,sqa:0}},
     proc(s,e,sp,d,det,i,t){if((i&63)===0){s.a.set(2400*det*(.82+.36*sp));s.b.set(5000*det*(.9+.24*sp));s.sq.set(s.sqf*det*(.96+.1*sp))}
@@ -45,10 +44,6 @@ export const SND_TOOLS={
       if(e>.3&&u01()<1.6*sp/SR){s.pla=.06+.08*u01();s.plf=800+900*u01();s.pln=0}
       let q=0;if(s.pla>1e-4){s.pln++;const f=s.plf*(1+Math.min(1.2,s.pln/SR*60));s.plp+=2*Math.PI*f/SR;q=Math.sin(s.plp)*s.pla;s.pla*=.9986}
       return mix(o,0,q)}},
-  pastel:{att:.006,rel:.03,tap:{f:230,dec:.024,click:.55,amt:.5},
-    init(){return{a:new BQ('bp',1300,.6),rum:new BQ('lp',240,.7),cr:new Crackle(1900,1,.0016,1.1,.5)}},
-    proc(s,e,sp,d,det,i){if((i&63)===0)s.a.set(1250*det*(.85+.3*sp));const n=nz(),tm=.45+1.1*vnA(d*1.1),a=.12+.88*Math.pow(sp,.75);
-      return mix((s.a.p(n)*.75*tm+s.rum.p(n)*.5*sp)*e*a,s.cr.p(d,e*a)*1.6,0)}},
   gel:{att:.005,rel:.025,tap:{f:320,dec:.012,click:.8,amt:.4},
     init(){return{a:new BQ('bp',950,2.5),h:new BQ('hp',5200,.7),m:new BQ('bp',2300,.6),cr:new Crackle(6500,1.5,.0005,.7,.32)}},
     proc(s,e,sp,d,det,i){if((i&63)===0){s.a.set(950*det*(.9+.25*sp));s.m.set(2300*det)}const n=nz(),a=.1+.9*Math.pow(sp,.8);
@@ -65,7 +60,7 @@ export const SND_TOOLS={
     init(){return{h:new BQ('hp',450,.7),l:new BQ('lp',8500,.7)}},
     proc(s,e,sp,d,det,i,t){return mix(s.l.p(s.h.p(nz()))*.55*e*(1+.07*Math.sin(2*Math.PI*17.3*t))*(.85+.15*sp),0,0)}}
 };
-SND_TOOLS.chameleon=SND_TOOLS.marker;/* one bubble after van den Doel: Minnaert pitch from its radius, physical damping, slight upward chirp as it
+/* one bubble after van den Doel: Minnaert pitch from its radius, physical damping, slight upward chirp as it
    rises, sharp onset. Radii follow a power law, so many tiny ticks and only a few deeper blips. */
 export function bubbleParams(rr,scale){const rmin=.9,rmax=7.5,u=rr(),r=rmin*Math.pow(1-u*(1-Math.pow(rmin/rmax,1.5)),-1/1.5),f0=3260/r,d=(.13*f0+.0072*Math.pow(f0,1.5))*.62;
   return{f0,d,sg:d*(.09+.18*rr()),a:(scale||1)*.11*Math.pow(r/2,1.15)*(.55+.6*rr()),ph:rr()*TAU,k:0}}
@@ -99,14 +94,12 @@ export function toolEvent(put,e,rnd){
     evBubbles(put,t+.02,pan,.9*v,.22,7+Math.floor(rnd()*5),rnd);return}
   if(e.type==='tap'){[0,.1,.21].forEach((dt,j)=>{evKnock(put,t+dt,pan,(.28-j*.06)*v,[[150*p,.03,1],[420*p,.012,.3]]);for(let k=0;k<14;k++){const tt=t+dt+rnd()*.12,f=5000+rnd()*4000,bp=new BQ('bp',f,3),a=.05+rnd()*.08;put(tt,.006,pan,q=>bp.p(nz()*Math.exp(-q/SR/.0005))*a*3)}});return}
   switch(e.tool||S.tool){
-    case 'chameleon':
     case 'marker':if(cl){evSlide(put,t-.04,pan,.05*v,.04,2200*p);evSnap(put,t,pan,.45*v,3300*p)}else{evSlide(put,t,pan,.04*v,.035,1800*p);evPop(put,t+.035,pan,.5*v,330*p,140*p)}break;
     case 'copic':if(cl){evSlide(put,t-.05,pan,.05*v,.05,1700*p);evSnap(put,t,pan,.38*v,2500*p)}else{evSlide(put,t,pan,.045*v,.045,1500*p);evPop(put,t+.045,pan,.55*v,260*p,105*p)}break;
     case 'pencil':if(cl)evKnock(put,t,pan,.35*v,[[650*p,.035,1],[1700*p,.015,.5],[2900*p,.008,.25]]);else{evKnock(put,t,pan,.16*v,[[700*p,.03,1],[1800*p,.012,.4]]);evSlide(put,t+.03,pan,.03*v,.05,3000*p)}break;
     case 'gel':evSnap(put,t,pan,.4*v,4300*p);evSnap(put,t+.022+rnd()*.01,pan,.3*v,3000*p);evKnock(put,t,pan,.12*v,[[1300*p,.008,.5]]);break;
     case 'liquid':evBubbles(put,t,pan,(cl?1.1:.8)*v,cl?.18:.12,cl?6:4,rnd);break;
     case 'watercolor':if(cl){evSwirl(put,t,pan,.12*v,.55);evPlips(put,t,pan,.1*v,.5,14,rnd)}else{evKnock(put,t-.13,pan,.1*v,[[2100*p,.06,1],[3400*p,.04,.5]]);evKnock(put,t-.05,pan,.08*v,[[2150*p,.06,1],[3450*p,.04,.5]])}break;
-    case 'pastel':if(cl)evKnock(put,t,pan,.3*v,[[380*p,.045,1],[900*p,.02,.4]]);else evSlide(put,t,pan,.05*v,.06,1200*p);break;
     case 'puffy':if(cl){evSnap(put,t,pan,.25*v,2600*p);evPop(put,t+.03,pan,.3*v,180*p,90*p)}else{evSlide(put,t,pan,.05*v,.08,1300*p);evSnap(put,t+.08,pan,.25*v,3000*p)}break;
     case 'glue':if(cl)evSnap(put,t,pan,.22*v,2900*p);else{evSlide(put,t,pan,.04*v,.06,1500*p);evSnap(put,t+.06,pan,.22*v,3200*p)}break;
     case 'airbrush':if(cl)evSnap(put,t,pan,.12*v,2800*p);else{evSnap(put,t,pan,.15*v,3500*p);evHiss(put,t+.01,pan,.12*v,.25)}break;

@@ -76,7 +76,7 @@ export async function genAudio(p,onProg){
      else if(acc>tlim&&j-s0>60){segs.push([s0,j,kind]);reset(j);kind=2}
      else if(j-s0>lim){segs.push([s0,j,kind]);reset(j);kind=1}}
    if(s0>=0)segs.push([s0,M,kind]);
-   const SQ={marker:.26,chameleon:.26,copic:.12,gel:.08,puffy:.05,glue:.05};
+   const SQ={marker:.26,copic:.12,gel:.08,puffy:.05,glue:.05};
    segs.forEach(([a,b,k],gi)=>{const L=b-a,g=.7+rnd()*.46,det=.9+rnd()*.2,m=Math.min(b-1,a+(L>>1));
      // a re-set after turning round a curve: the tip leaves the paper briefly and lands a bit differently
      const lift=k===2?(rnd()<.8?Math.round(22+rnd()*55):0):k===0&&L>60&&rnd()<.16?Math.round(12+rnd()*30):k===1&&rnd()<.35?Math.round(10+rnd()*25):0;

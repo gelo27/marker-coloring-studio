@@ -17,8 +17,6 @@ export const CYL_PROF={
   // round brush loaded with paint, crimped metal ferrule, tapered lacquered handle
   brush:{L:640,R:14,seg:[[0,60,0,9.6,'bristle','belly'],[60,96,10,11.8,'metal','cone'],[96,99,11.4,11.4,'metal','groove'],[99,104,12,12,'metal','cyl'],[104,107,11.6,11.6,'metal','groove'],[107,126,12.1,12.4,'metal','cone'],
     [126,134,12.3,12.3,'lacq','cyl'],[134,612,12.7,8.4,'lacq','cone'],[612,640,8.4,8.4,'lacq','end']]},
-  // soft pastel stick with a worn tip and a paper wrapper with a colour band
-  pastel:{L:262,R:21,seg:[[0,12,0,15.5,'chalk','bull'],[12,90,16.5,18.6,'chalk','cone'],[90,150,19.8,19.8,'paper','cyl'],[150,166,19.9,19.9,'pband','cyl'],[166,232,19.8,19.8,'paper','cyl'],[232,248,18.6,18.6,'chalk','cyl'],[248,262,18.6,18.6,'chalk','end']]},
   // gel pen: metal tip, clear section, rubber grip, clear barrel showing the ink tube, coloured end plug
   gel:{L:540,R:16,seg:[[0,3,0,1.3,'metal','bull'],[3,22,1.5,5,'metal','cone'],[22,34,5.6,9.6,'clear','cone'],[34,150,12.6,12.6,'rubber','cyl'],[150,154,13.4,13.4,'clear','groove'],[154,462,14,14,'clear','cyl'],
     [462,466,14.4,14.4,'capT','groove'],[466,530,15,15,'capT','cyl'],[530,540,15,15,'capT','end']]},
@@ -30,7 +28,7 @@ export const CYL_PROF={
     [190,340,34.6,34.6,'label','cyl'],[340,418,34,34,'bottleW','cyl'],[418,430,34,34,'bottleW','end']]},
   // glass dropper full of ink, plastic collar, rubber bulb
   dropper:{L:430,R:22,seg:[[0,4,0,2,'glass','bull'],[4,64,2.2,7.5,'glass','cone'],[64,250,9,9,'glass','cyl'],[250,272,15,15,'white','cyl'],[272,430,20.5,20.5,'rubber','dome']]}};
-const TOOL_PROF={marker:'marker',chameleon:'marker',copic:'copic',pencil:'pencil',watercolor:'brush',pastel:'pastel',gel:'gel',puffy:'puffy',glue:'glue',liquid:'dropper'};
+const TOOL_PROF={marker:'marker',copic:'copic',pencil:'pencil',watercolor:'brush',gel:'gel',puffy:'puffy',glue:'glue',liquid:'dropper'};
 export const TOOL_LEN=Object.fromEntries(Object.entries(TOOL_PROF).map(([t,p])=>[t,CYL_PROF[p].L]));
 /* untinted materials and their colour; glass and clear plastic have tinted content inside (a fraction of the radius) */
 const PLAIN={white:[.97,.97,.97],metal:[.8,.82,.86],cap:[.96,.96,.96],label:[.99,.99,.99],wood:[.95,.8,.6],paper:[.97,.95,.9],nozzle:[.97,.97,.98],lacq:[.4,.15,.18],glass:[.84,.9,.97],bottleW:[.97,.96,.92],clear:[.88,.92,.97]};

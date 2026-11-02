@@ -1,6 +1,7 @@
 import {stopAudio} from '../audio/audio.js';
 import {flySegs,plan,planDirty,replan,setPlanDirty} from '../core/plan.js';
-import {FLY,FLY_MOVES,FX_META,HUM_META,HUM_PRESETS,S,TOOLS} from '../core/settings.js';
+import {FLY,FLY_MOVES,FX_META,HUM_META,HUM_PRESETS,PEN,PEN_LIST,S,TOOLS} from '../core/settings.js';
+import {penPreview} from '../render/pencil.js';
 import {$} from '../core/utils.js';
 import {zoneByI} from '../core/zones.js';
 import {ed} from '../editor/editor.js';
@@ -29,6 +30,16 @@ export function buildToolUI(){
   Object.keys(TOOLS).forEach(k=>{const T=TOOLS[k];const b=document.createElement('button');b.dataset.t=k;b.setAttribute('aria-pressed',k===S.tool);b.innerHTML='<img class="tthumb" data-tool-thumb="'+k+'" alt="" width="96" height="96"><b>'+T.name+'</b><span>'+T.sub+'</span>';
     b.onclick=()=>{if(busy)return;S.tool=k;[...el.children].forEach(x=>x.setAttribute('aria-pressed',x===b));setToolSprite();rebuild(false)};el.appendChild(b)});
 }
+/* pencil brushes: a card with a sample stroke for each; the broader brushes lay wider strokes, so the zones are re-planned */
+export function syncPenUI(){const box=$('penBox');if(box)[...box.querySelectorAll('[data-pen]')].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pen===PEN.brush)))}
+export function buildPenUI(){
+  const box=$('penBox');if(!box)return;
+  box.innerHTML='<span class="lbl">Олівець: пензель</span><div class="pens">'+PEN_LIST.map(([k,n])=>'<button data-pen="'+k+'" aria-pressed="false"><b>'+n+'</b><canvas width="480" height="88" aria-hidden="true"></canvas></button>').join('')+'</div>';
+  [...box.querySelectorAll('[data-pen]')].forEach(b=>{const k=b.dataset.pen,c=b.querySelector('canvas');
+    if(k==='classic'){const x=c.getContext('2d');x.strokeStyle='#7f8f28';x.lineCap='round';for(let j=0;j<9;j++){x.globalAlpha=.35+.4*((j*.37)%1);x.lineWidth=2.2;x.beginPath();for(let i=0;i<=48;i++){const t=i/48,px=480*(.08+.84*t),py=88*(.5-.22*Math.sin(t*Math.PI*2))+(j-4)*1.9;i?x.lineTo(px,py):x.moveTo(px,py)}x.stroke()}}
+    else{try{c.getContext('2d').drawImage(penPreview(k,'#7f8f28',480,88),0,0)}catch(e){console.warn(e)}}
+    b.onclick=()=>{if(busy||PEN.brush===k)return;PEN.brush=k;syncPenUI();rebuild(true)}});
+  syncPenUI()}
 /* watercolour brush: every slider re-simulates the zones, so it applies on release */
 const WC_UI=[['hold','Сохне лише після зафарбовування всієї зони'],['tuft','Фізичні волосинки'],['body','Тіло мазка (менше — помітніші волосинки)',.25,1,.01],['bend','Прогин волосинок',0,1.2,.01],['splay','Розкид пучка',.4,1.8,.01],
   ['opacity','Насиченість фарби',.4,1.6,.01],['edge','Темна кромка мазка',0,2,.05],['cap','Темніший край біля контуру',0,2,.05],['veins','Світлі прожилки при висиханні',0,1,.05],['level','Рівність заливки',0,.6,.01],
