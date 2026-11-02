@@ -33,7 +33,8 @@ export const PEN_BRUSHES=Object.fromEntries(Object.entries({
   shaggy:{name:'Shaggy',shape:'shaggy',grain:'tooth',tile:200,depth:.32,hard:.65,gain:1.1,size:30,flow:.95,spacing:.03,sizeJ:.2,scatter:.03,pSize:.2,pFlow:.6,taperS:15,taperE:25,taperMin:.5,streak:.2,speck:.3,wMul:1.6}
 }).map(([k,b])=>[k,Object.assign({id:k},PEN_DEF,b)]));
 export const PEN_LIST=[['pencilT','Pencil T.'],['pencilR','Pencil R.'],['brushR','Brush R.'],['shaggy','Shaggy'],['classic','Класичний']];
-export const PEN_DEFAULT='pencilT',PEN={brush:PEN_DEFAULT};
+// grad: how strongly the pressure (and with it the shade) changes across a zone, 0 = evenly
+export const PEN_DEFAULT='pencilT',PEN_GRAD=.5,PEN={brush:PEN_DEFAULT,grad:PEN_GRAD};
 export function penWMul(){const B=PEN_BRUSHES[PEN.brush];return B?B.wMul:1}
 export const HUM_DEF={fill:'auto',turn:.35,sloppy:.3,jitter:.45,tremor:.3,pressure:.5,tempo:.5,pauses:.35,outline:.75,lifts:.25,cross:.15,dirVar:.5,shuffle:.4,shake:.4,touch:true};
 export const HUM_PRESETS={

@@ -3,8 +3,8 @@ import {addonsState,applyAddonsState} from '../addons/registry.js';
 import {SND,stopAudio} from '../audio/audio.js';
 import {plan} from '../core/plan.js';
 import {loadArtFromImage} from '../core/segment.js';
-import {DESK,DUO,PEN,PEN_BRUSHES,PEN_DEFAULT,FLQ,FLY,FORMATS,GLT,HUM_DEF,HUM_META,IMP,INK,OUT,PUFF,S,SHADE,TOOLS,U,VS,view} from '../core/settings.js';
-import {$,durLabel,mk} from '../core/utils.js';
+import {DESK,DUO,PEN,PEN_BRUSHES,PEN_DEFAULT,PEN_GRAD,FLQ,FLY,FORMATS,GLT,HUM_DEF,HUM_META,IMP,INK,OUT,PUFF,S,SHADE,TOOLS,U,VS,view} from '../core/settings.js';
+import {$,clamp,durLabel,mk} from '../core/utils.js';
 import {applySrcColors,art,customOrder,orderMode,palette,seg,setCustomOrder,setPalette,zoneByI,zones} from '../core/zones.js';
 import {buildDemo} from '../data/demoArt.js';
 import {ed} from '../editor/editor.js';
@@ -73,6 +73,7 @@ export async function applyProject(d){
   S.hum=Object.assign({},HUM_DEF,s.hum||{});if(s.fx)Object.keys(s.fx).forEach(k=>{if(S.fx[k])Object.assign(S.fx[k],s.fx[k])});
   [[U,d.U],[PUFF,d.PUFF],[DUO,d.DUO],[GLT,d.GLT],[IMP,d.IMP],[SHADE,d.SHADE],[SND,d.SND]].forEach(([a,b])=>{if(b)Object.assign(a,b)});
   PEN.brush=d.PEN&&(PEN_BRUSHES[d.PEN.brush]||d.PEN.brush==='classic')?d.PEN.brush:PEN_DEFAULT;
+  PEN.grad=d.PEN&&typeof d.PEN.grad==='number'?clamp(d.PEN.grad,0,1):PEN_GRAD;
   Object.assign(WC,WC_DEF,d.WC||{});wcClearCache();Object.assign(SNOW,SNOW_DEF,d.SNOW||{});airLoad(d.AIR);
   if(d.FLY)Object.assign(FLY,d.FLY);
   if(d.desk){Object.assign(DESK,{mode:d.desk.mode||'default',scale:d.desk.scale||1,bright:d.desk.bright||1,blur:d.desk.blur||0,tint:d.desk.tint||'#ccded6'});

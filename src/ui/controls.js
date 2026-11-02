@@ -31,10 +31,14 @@ export function buildToolUI(){
     b.onclick=()=>{if(busy)return;S.tool=k;[...el.children].forEach(x=>x.setAttribute('aria-pressed',x===b));setToolSprite();rebuild(false)};el.appendChild(b)});
 }
 /* pencil brushes: a card with a sample stroke for each; the broader brushes lay wider strokes, so the zones are re-planned */
-export function syncPenUI(){const box=$('penBox');if(box)[...box.querySelectorAll('[data-pen]')].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pen===PEN.brush)))}
+export function syncPenUI(){const box=$('penBox');if(!box)return;[...box.querySelectorAll('[data-pen]')].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pen===PEN.brush)));
+  const g=$('penGrad');if(g){g.value=PEN.grad;$('penGradV').textContent=Math.round(PEN.grad*100);g.disabled=PEN.brush==='classic'}}
 export function buildPenUI(){
   const box=$('penBox');if(!box)return;
-  box.innerHTML='<span class="lbl">Олівець: пензель</span><div class="pens">'+PEN_LIST.map(([k,n])=>'<button data-pen="'+k+'" aria-pressed="false"><b>'+n+'</b><canvas width="480" height="88" aria-hidden="true"></canvas></button>').join('')+'</div>';
+  box.innerHTML='<span class="lbl">Олівець: пензель</span><div class="pens">'+PEN_LIST.map(([k,n])=>'<button data-pen="'+k+'" aria-pressed="false"><b>'+n+'</b><canvas width="480" height="88" aria-hidden="true"></canvas></button>').join('')+'</div>'
+    +'<div class="row"><label for="penGrad">Плавний перехід (натиск)</label><span class="val" id="penGradV"></span></div><input type="range" id="penGrad" min="0" max="1" step="0.05">'
+    +'<p class="hint">Рука тисне на олівець сильніше до одного краю зони: там колір щільніший і глибший, а до іншого краю — легший, крізь нього проступає папір. 0 — рівномірно. Не діє на класичний олівець.</p>';
+  $('penGrad').oninput=e=>{$('penGradV').textContent=Math.round(e.target.value*100)};$('penGrad').onchange=e=>{PEN.grad=+e.target.value;if(!busy)rebuild(true)};
   [...box.querySelectorAll('[data-pen]')].forEach(b=>{const k=b.dataset.pen,c=b.querySelector('canvas');
     if(k==='classic'){const x=c.getContext('2d');x.strokeStyle='#7f8f28';x.lineCap='round';for(let j=0;j<9;j++){x.globalAlpha=.35+.4*((j*.37)%1);x.lineWidth=2.2;x.beginPath();for(let i=0;i<=48;i++){const t=i/48,px=480*(.08+.84*t),py=88*(.5-.22*Math.sin(t*Math.PI*2))+(j-4)*1.9;i?x.lineTo(px,py):x.moveTo(px,py)}x.stroke()}}
     else{try{c.getContext('2d').drawImage(penPreview(k,'#7f8f28',480,88),0,0)}catch(e){console.warn(e)}}

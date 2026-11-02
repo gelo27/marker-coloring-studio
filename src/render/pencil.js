@@ -1,13 +1,17 @@
 import {PEN,PEN_BRUSHES} from '../core/settings.js';
 import {legPt,mkLeg,vn1} from '../core/strokes.js';
-import {SS,clamp,mk,rngOf} from '../core/utils.js';
+import {SS,TAU,clamp,mk,rngOf,smooth,vnoise} from '../core/utils.js';
+import {liqShades} from '../core/zones.js';
 /* ================= COLOURED-PENCIL BRUSHES (WebGL2) =================
    Adapted from the Atelier brush engine. A stroke is a row of stamps laid along the leg: every stamp is a procedural
    tip shape whose depth (pressure × flow × shape) is compared with the height of a procedural paper grain, so the
    pigment catches the tops of the tooth first and fills the valleys as the pressure grows. Stamps of one leg merge
    with MAX (no darker beads where they overlap); legs are laid over each other like separate pencil strokes.
    The ends taper where the pencil is lifted. Stamps are deterministic per leg, so a half-drawn leg is exactly the
-   start of the finished one. */
+   start of the finished one.
+   Smooth transition: across a zone the hand presses harder towards one side, so the pigment fills more of the
+   grain there and is laid more thinly towards the other side (the paper shows through); the heavy side also leans
+   to a deeper neighbouring hue and the light side to a paler one, like a second pencil layered over the first. */
 const GRAIN_IDS={tooth:0,weave:1,grit:2,fiber:3,speck:4},SHAPE_IDS={round:10,soft:11,pencil:12,bristle:13,flat:14,messy:15,shaggy:16,spatter:17,speckle:18,chalk:19};
 
 const VS_FULL=`#version 300 es
@@ -109,14 +113,14 @@ void main(){
 }`;
 /* one stamp: page position, radii, angle, flow, seed, random; drawn into a box whose top-left is u_org on the page */
 const VS_STAMP=`#version 300 es
-layout(location=0) in vec2 a_q;layout(location=1) in vec4 a_i0;layout(location=2) in vec4 a_i1;
-uniform vec2 u_res,u_org;out vec2 v_l;out vec3 v_d;out vec2 v_g;out vec2 v_r;
+layout(location=0) in vec2 a_q;layout(location=1) in vec4 a_i0;layout(location=2) in vec4 a_i1;layout(location=3) in float a_m;
+uniform vec2 u_res,u_org;out vec2 v_l;out vec3 v_d;out vec2 v_g;out vec2 v_r;out float v_m;
 void main(){float c=cos(a_i1.x),s=sin(a_i1.x);vec2 loc=a_q*a_i0.zw;vec2 p=a_i0.xy+vec2(c*loc.x-s*loc.y,s*loc.x+c*loc.y);
   vec2 q=p-u_org;gl_Position=vec4(q.x/u_res.x*2.-1.,1.-q.y/u_res.y*2.,0.,1.);
-  v_l=a_q;v_d=vec3(a_i1.y,a_i1.z,a_i1.w);v_g=p;v_r=a_i0.zw;}`;
+  v_l=a_q;v_d=vec3(a_i1.y,a_i1.z,a_i1.w);v_g=p;v_r=a_i0.zw;v_m=a_m;}`;
 const FS_STAMP=`#version 300 es
-precision highp float;in vec2 v_l;in vec3 v_d;in vec2 v_g;in vec2 v_r;
-uniform sampler2D u_shape,u_grain;uniform vec3 u_color;
+precision highp float;in vec2 v_l;in vec3 v_d;in vec2 v_g;in vec2 v_r;in float v_m;
+uniform sampler2D u_shape,u_grain;uniform vec3 u_color,u_dark,u_light;
 uniform float u_gs,u_depth,u_hard,u_gain,u_gamt,u_streak,u_streakF,u_sseed,u_speck,u_valJ;uniform vec2 u_gofs;out vec4 o;
 float h1(float n){return fract(sin(n*127.1+311.7)*43758.5453);}
 float n1(float x){float i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(h1(i),h1(i+1.),f);}
@@ -127,14 +131,14 @@ void main(){vec2 suv=v_l*.5+.5;if(fract(v_d.y*7.31)>.5)suv.x=1.-suv.x;
   float dep=sh*v_d.x*(1.+u_streak*(s*2.-1.))*u_gain;
   float aH=smoothstep(gr.r-u_depth,gr.r+u_depth,dep),aM=clamp(dep,0.,1.)*(1.-u_gamt*gr.r);
   float a=clamp(mix(aM,aH,u_hard),0.,1.);if(a<.003)discard;
-  vec3 col=u_color*(1.-u_speck*gr.g)*(.95+.1*gr.b)*(1.+u_valJ*(v_d.z-.5));
+  vec3 col=(v_m>0.?mix(u_color,u_dark,v_m):mix(u_color,u_light,-v_m))*(1.-u_speck*gr.g)*(.95+.1*gr.b)*(1.+u_valJ*(v_d.z-.5));
   o=vec4(clamp(col,0.,1.)*a,a);}`;
 /* one finished leg (premultiplied) laid over what is already in the box */
 const FS_COMP=`#version 300 es
 precision highp float;uniform sampler2D u_tex;out vec4 o;
 void main(){o=texelFetch(u_tex,ivec2(gl_FragCoord.xy),0);}`;
 
-const SCAP=4096,FL=8;
+const SCAP=4096,FL=9;
 let G=null,gl=null;
 function prog(vs,fs){
   const sh=(t,src)=>{const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s};
@@ -171,7 +175,8 @@ function penGL(){
     gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
     g.buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,g.buf);gl.bufferData(gl.ARRAY_BUFFER,g.inst.byteLength,gl.STREAM_DRAW);
     gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.FLOAT,false,FL*4,0);gl.vertexAttribDivisor(1,1);
-    gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,4,gl.FLOAT,false,FL*4,16);gl.vertexAttribDivisor(2,1);gl.bindVertexArray(null);
+    gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,4,gl.FLOAT,false,FL*4,16);gl.vertexAttribDivisor(2,1);
+    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,1,gl.FLOAT,false,FL*4,32);gl.vertexAttribDivisor(3,1);gl.bindVertexArray(null);
     g.max=Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE),gl.getParameter(gl.MAX_VIEWPORT_DIMS)[0],8192);
   }catch(e){console.warn('pencil brushes unavailable, using the classic pencil',e);G=false}
   return G||null;
@@ -188,32 +193,44 @@ function ensure(w,h){
 const gap=l=>!l||l.kind==='jump'||l.kind==='pause';
 /* where the pencil is lifted: before a jump or a pause (and at both ends of the path) the leg's end tapers */
 function lifts(r){if(r.pzL===r.legs)return;const L=r.legs;L.forEach((l,i)=>{l.pzS=gap(L[i-1]);l.pzE=gap(L[i+1]);l.pz=null});r.pzL=L}
-/* the stamps of a leg: [x, y, rx, ry, angle, flow, seed, rand] each, with their place on the leg (t) */
+/* the zone's transition: t(x,y) is 0 where the pencil barely touches and 1 where it presses hardest. The direction
+   across the zone's box is its own, bent by slow noise so the change is not a ruler-straight band; small zones get
+   a gentler one. null when it is off (or for the brush previews, which have no zone) */
+function gradOf(r){
+  const s=PEN.grad||0;if(!(s>0)||r.x0===undefined)return null;
+  const key=s+'|'+r.color+'|'+r.x0+'|'+r.y0+'|'+r.x1+'|'+r.y1;if(r.pgK===key)return r.pg;
+  const rnd=rngOf((r.i||0)*313+(r.lk||0)*7+11),a=rnd()*TAU,c=Math.cos(a),sn=Math.sin(a),cx=(r.x0+r.x1)/2,cy=(r.y0+r.y1)/2;
+  const ext=Math.abs((r.x1-r.x0)*c)+Math.abs((r.y1-r.y0)*sn)+1,f=1.6/Math.max(r.x1-r.x0,r.y1-r.y0,1),o=rnd()*100,sh=liqShades(r.color,r.i||0);
+  const S=s*(.35+.65*clamp(ext/(90*SS),0,1));
+  r.pg={s:S,dark:hexRgb(sh[0]),light:hexRgb(sh[1]),t:(x,y)=>smooth(clamp(.5+((x-cx)*c+(y-cy)*sn)/ext+.45*(vnoise(x*f+o,y*f+o*.7)-.5),0,1))};r.pgK=key;return r.pg}
+/* the stamps of a leg: [x, y, rx, ry, angle, flow, seed, rand, hue shift] each, with their place on the leg (t) */
 function legStamps(l,r,B){
-  const key=B.id+'|'+r.w;if(l.pz&&l.pz.key===key)return l.pz;
-  const W=r.w*(l.wm||1)*1.15,k=W/B.size,seed=Math.round(l.p0[0]*7.3+l.p0[1]*13.1+l.p1[0]*3.7+l.p1[1]*1.9),rnd=rngOf(seed*31+B.size*977);
-  const pb=clamp((l.alpha||.76)*1.1,.35,1),ns=rnd()*500,N=Math.max(2,Math.ceil(l.len*1.25/(.4*SS)));
+  const g=gradOf(r),key=B.id+'|'+r.w+'|'+(g?r.pgK:'');if(l.pz&&l.pz.key===key)return l.pz;
+  // the stamps are wider than the spacing of the strokes and the contour is traced broader and firmer, so no paper
+  // is left along the drawing's lines (what spills over is cut off by the zone's mask)
+  const edge=l.kind==='trace',W=r.w*(l.wm||1)*(edge?2:1.4),k=W/B.size,seed=Math.round(l.p0[0]*7.3+l.p0[1]*13.1+l.p1[0]*3.7+l.p1[1]*1.9),rnd=rngOf(seed*31+B.size*977);
+  const pb=clamp((l.alpha||.76)*1.1,edge?.9:.35,1),ns=rnd()*500,N=Math.max(2,Math.ceil(l.len*1.25/(.4*SS)));
   // the leg as a fine polyline with distances along it
   const px=new Float32Array(N+1),py=new Float32Array(N+1),pd=new Float32Array(N+1);
   for(let i=0;i<=N;i++){const p=legPt(l,i/N);px[i]=p[0];py[i]=p[1];pd[i]=i?pd[i-1]+Math.hypot(p[0]-px[i-1],p[1]-py[i-1]):0}
   const len=pd[N],raw=[],tMin=(B.taperS>0||B.taperE>0)?Math.max(B.taperMin,.4):1;
   let since=0,step=0,dx=1,dy=0,have=false;
   // a joined leg starts half a step in, so the joint is not stamped twice
-  const emit=i=>{const d=pd[i],p=pb*(.84+.16*vn1(ns+d/(W*2.2)));const last=raw[raw.length-1];
+  const emit=i=>{const d=pd[i],gt=g?g.t(px[i],py[i]):1,p=pb*(.84+.16*vn1(ns+d/(W*2.2)))*(g?1-g.s*(edge?.35:.62)*(1-gt):1);const last=raw[raw.length-1];
     if(last){const ex=px[i]-last.x,ey=py[i]-last.y,dd=Math.hypot(ex,ey);if(dd>1e-4){const ux=ex/dd,uy=ey/dd;if(!have){dx=ux;dy=uy;have=true;if(raw.length===1)last.dir=Math.atan2(uy,ux)}else{dx=dx*.8+ux*.2;dy=dy*.8+uy*.2}}}
     else if(N>0){const ex=px[Math.min(N,i+2)]-px[i],ey=py[Math.min(N,i+2)]-py[i];if(Math.hypot(ex,ey)>1e-4){dx=ex;dy=ey}}
-    raw.push({x:px[i],y:py[i],d,p,t:i/N,dir:Math.atan2(dy,dx),r1:rnd(),r2:rnd(),r3:rnd(),r4:rnd(),r5:rnd(),r6:rnd()});since=0;
+    raw.push({x:px[i],y:py[i],d,p,t:i/N,m:g?(gt>.5?g.s*.7*Math.pow((gt-.5)*2,1.5):-g.s*.45*(1-gt*2)):0,dir:Math.atan2(dy,dx),r1:rnd(),r2:rnd(),r3:rnd(),r4:rnd(),r5:rnd(),r6:rnd()});since=0;
     step=Math.max(.5*k,.4,B.spacing*W*(1-B.pSize*(1-p))*tMin)};
   if(l.pzS!==false)emit(0);else{since=0;step=Math.max(.5*k,.4,B.spacing*W*tMin)*.5}
   for(let i=1;i<=N;i++){since+=pd[i]-pd[i-1];if(since>=step)emit(i)}
   const n=raw.length,a=new Float32Array(n*FL),ts=new Float32Array(n);
   raw.forEach((s,j)=>{
     const tS=B.taperS>0&&l.pzS!==false?Math.min(1,s.d/(B.taperS*k)):1,tE=B.taperE>0&&l.pzE!==false?Math.min(1,(len-s.d)/(B.taperE*k)):1;
-    const tt=Math.min(tS,tE),t=tt*tt*(3-2*tt);
-    const rr=Math.max(.45,W*.5*(1-B.pSize*(1-s.p))*(B.taperMin+(1-B.taperMin)*t)*(1-B.sizeJ*s.r3));
+    const tt=Math.min(tS,tE),t=tt*tt*(3-2*tt),tm=Math.max(B.taperMin,.65);
+    const rr=Math.max(.45,W*.5*(1-B.pSize*(1-s.p))*(tm+(1-tm)*t)*(1-B.sizeJ*s.r3));
     const flow=B.flow*(1-B.pFlow*(1-s.p))*(.3+.7*t)*(1-B.flowJ*s.r4),ang=(B.follow?s.dir:0)+(s.r2-.5)*2*B.rotJ;
     const off=(s.r1-.5)*2*B.scatter*2*rr,off2=(s.r6-.5)*B.scatter*rr,c=Math.cos(s.dir),sn=Math.sin(s.dir),o=j*FL;
-    a[o]=s.x-sn*off+c*off2;a[o+1]=s.y+c*off+sn*off2;a[o+2]=rr;a[o+3]=rr*B.roundness;a[o+4]=ang;a[o+5]=flow;a[o+6]=s.r5*100;a[o+7]=s.r4;ts[j]=s.t});
+    a[o]=s.x-sn*off+c*off2;a[o+1]=s.y+c*off+sn*off2;a[o+2]=rr;a[o+3]=rr*B.roundness;a[o+4]=ang;a[o+5]=flow;a[o+6]=s.r5*100;a[o+7]=s.r4;a[o+8]=s.m;ts[j]=s.t});
   l.pz={key,a,t:ts,n,sseed:rnd()*100,gofs:[rnd(),rnd()],k};return l.pz}
 const hexRgb=h=>{const n=parseInt(h.slice(1),16);return[(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]};
 /* lays the legs ([leg, fraction drawn] pairs, in order) into ctx, whose origin is the zone's box (r.bx, r.by);
@@ -239,7 +256,7 @@ function drawBox(ctx,r,jobs,B,x0,y0,w,h){
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.clear(gl.COLOR_BUFFER_BIT);
   for(const[P,n]of jobs){
     gl.bindFramebuffer(gl.FRAMEBUFFER,G.scr.fb);gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(S.p);gl.uniform2f(u.u_res,w,h);gl.uniform2f(u.u_org,x0,y0);gl.uniform3f(u.u_color,col[0],col[1],col[2]);
+    gl.useProgram(S.p);gl.uniform2f(u.u_res,w,h);gl.uniform2f(u.u_org,x0,y0);gl.uniform3f(u.u_color,col[0],col[1],col[2]);const g=gradOf(r),dk=g?g.dark:col,lt=g?g.light:col;gl.uniform3f(u.u_dark,dk[0],dk[1],dk[2]);gl.uniform3f(u.u_light,lt[0],lt[1],lt[2]);
     gl.uniform1f(u.u_gs,1/(B.tile*SS));gl.uniform1f(u.u_depth,B.depth);gl.uniform1f(u.u_hard,B.hard);gl.uniform1f(u.u_gain,B.gain);gl.uniform1f(u.u_gamt,B.gamt);
     gl.uniform1f(u.u_streak,B.streak);gl.uniform1f(u.u_streakF,B.streakF/P.k);gl.uniform1f(u.u_sseed,P.sseed);gl.uniform1f(u.u_speck,B.speck);gl.uniform1f(u.u_valJ,B.valJ);gl.uniform2f(u.u_gofs,P.gofs[0],P.gofs[1]);
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,sh);gl.uniform1i(u.u_shape,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,gr);gl.uniform1i(u.u_grain,1);
@@ -253,6 +270,6 @@ function drawBox(ctx,r,jobs,B,x0,y0,w,h){
 /* a sample stroke of a brush (a gentle S), for the brush picker */
 export function penPreview(id,color,w,h){
   const B=PEN_BRUSHES[id],cv=mk(w,h);if(!B||!penGL())return cv;
-  const W=h*B.size/60,pts=[];for(let i=0;i<=24;i++){const t=i/24;pts.push([w*(.08+.84*t),h*(.5-.22*Math.sin(t*Math.PI*2))])}
+  const W=h*B.size/84,pts=[];for(let i=0;i<=24;i++){const t=i/24;pts.push([w*(.08+.84*t),h*(.5-.22*Math.sin(t*Math.PI*2))])}
   const legs=[];for(let i=0;i<24;i++)legs.push(mkLeg(pts[i],pts[i+1],'run',0,.8,1));
   const r={color,w:W,bx:0,by:0,bw:w,bh:h,legs};penDraw(cv.getContext('2d'),r,legs.map(l=>[l,1]),B);return cv}
