@@ -39,7 +39,7 @@ function geometry(seg){
 
   // Remove redundant corner pixels. The graph below suppresses diagonal links whenever
   // an orthogonal two-step link exists, so a staircase is not mistaken for a junction.
-  const OFF=[1,W+1,W,W-1,-1,-W-1,-W,-W+1],DX=[1,1,0,-1,-1,-1,0,1],DY=[0,1,1,1,0,-1,-1,-1];
+  const DX=[1,1,0,-1,-1,-1,0,1],DY=[0,1,1,1,0,-1,-1,-1];
   for(const i of fg){
     if(!sk[i])continue;
     const n=sk[i-W],e=sk[i+1],s=sk[i+W],w=sk[i-1],dg=sk[i-W+1]+sk[i+W+1]+sk[i+W-1]+sk[i-W-1];
