@@ -399,7 +399,9 @@ export function inkPlan(seg,c0){
       const q=Math.round(clamp(timeMap[i],0,1)*65535),k=i*4;
       data[k]=q>>8;data[k+1]=q&255;data[k+3]=255;
     }
-    TX={key,data,W:g.W,H:g.H}  I.tex=TX;return I}
+    TX={key,data,W:g.W,H:g.H};
+  }
+  I.tex=TX;return I}
 /* where the inking tool is at plan time c, or null once the inking is over */
 export function inkPen(I,c,introWide){
   const st=I.st,base={color:I.color,tool:I.tool,ink:true};
