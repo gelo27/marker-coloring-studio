@@ -66,6 +66,31 @@ function geometry(seg){
     degree[i]=n;
   }
 
+  // Round only true stroke ends (degree 1), never junctions. Estimate the cap
+  // radius across the local normal, so thin pencil lines and thick markers both fit.
+  const capEnds=[];
+  for(const i of fg){
+    if(!sk[i]||degree[i]!==1)continue;
+    let q=-1;
+    for(let k=0;k<8;k++){const p=neighbours(i,k);if(p>=0){q=p;break}}
+    if(q<0)continue;
+    const x=i%W+.5,y=(i/W|0)+.5,qx=q%W+.5,qy=(q/W|0)+.5;
+    const dx=qx-x,dy=qy-y,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+    const sample=sign=>{
+      let last=0;
+      for(let r=1;r<=32;r++){
+        const xx=Math.round(x+dx/L*.75+nx*r*sign-.5);
+        const yy=Math.round(y+dy/L*.75+ny*r*sign-.5);
+        if(xx<0||xx>=W||yy<0||yy>=H)break;
+        if(A[yy*W+xx]>=45)last=r;
+        else if(r>last+1)break;
+      }
+      return last;
+    };
+    const a=sample(-1),b=sample(1),radius=clamp((a+b)*.5+1,1.5,32);
+    capEnds.push({i,x,y,r:radius});
+  }
+
   // Trace every graph edge exactly once. A stroke runs from one endpoint/junction
   // to the next. At junctions the shared node is included in both paths, allowing
   // the pen to continue through the meeting point without leaving a visible gap.
@@ -191,22 +216,12 @@ function geometry(seg){
   };
   grow();
 
-  // Disconnected ink fragments (for example a dot above an i) get their own
-  // short tap. Single-pixel dust is treated as paper texture, not as a late stroke.
+  // Disconnected weak marks are usually construction sketches or scan noise:
+  // do not invent a late dot stroke for them. They are excluded from the ink mask.
   for(let i=0;i<N;i++){
     if(!A[i]||own[i]!==-1)continue;
     const q0=qt;own[i]=i;Q[qt++]=i;grow();
-    const count=qt-q0;
-    if(count>=2){
-      let sx=0,sy=0;
-      for(let k=q0;k<qt;k++){sx+=Q[k]%W;sy+=(Q[k]/W)|0}
-      const x=sx/count+.5,y=sy/count+.5,j=strokes.length;
-      sid[i]=j;sarc[i]=0;
-      strokes.push({X:new Float32Array([x,x]),Y:new Float32Array([y,y]),cum:new Float32Array([0,0]),len:0,dot:true});
-      for(let k=q0;k<qt;k++)own[Q[k]]=i;
-    }else{
-      for(let k=q0;k<qt;k++)own[Q[k]]=-2;
-    }
+    for(let k=q0;k<qt;k++)own[Q[k]]=-2;
   }
 
   // Label connected ink objects for ordering. Within each object the next stroke
@@ -310,7 +325,7 @@ function geometry(seg){
   }
 
   const rank=new Int32Array(n);order.forEach((j,k)=>rank[j]=k);
-  G={seg,W,H,N,A,own,sid,sarc,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
+  G={seg,W,H,N,A,own,sid,sarc,capEnds,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
   return G;
 }
 /* the inking phase of a plan: strokes with their times (plan time), starting at c0 */
@@ -328,10 +343,35 @@ export function inkPlan(seg,c0){
   const key=g.id+'|'+f.toFixed(6);
   if(!TX||TX.key!==key){const tS=new Float32Array(T.length*2);st.forEach((q,k)=>{tS[k*2]=(q.t0-c0)/I.dur;tS[k*2+1]=(q.t1-c0)/I.dur});
     const data=new Uint8Array(g.N*4),inv=p=>{let x=p;for(let it=0;it<5;it++){const s=smooth(x),F=.5*x+.5*s-p,dF=.5+3*x*(1-x);x=clamp(x-F/Math.max(.2,dF),0,1)}return x};
-    for(let i=0;i<g.N;i++){if(!g.A[i])continue;const o=g.own[i];let v=1;
-      if(o===-2)v=0; // tiny isolated scan specks stay with the paper instead of popping in after the tool leaves
-      else if(o>=0){const j=g.rank[g.sid[o]],S2=T[j];let p=S2.len>0?g.sarc[o]/S2.len:0;if(S2.rev)p=1-p;v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)))}
-      const q=Math.round(clamp(v,0,1)*65535);data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255}
+    for(let i=0;i<g.N;i++){
+      const o=g.own[i];
+      if(o<0||g.sid[o]<0)continue;
+      const j=g.rank[g.sid[o]],S2=T[j];
+      if(!S2)continue;
+      let p=S2.len>0?g.sarc[o]/S2.len:0;
+      if(S2.rev)p=1-p;
+      const v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
+      const q=Math.round(clamp(v,0,1)*65535);
+      data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255;
+    }
+    // Draw round caps analytically into B. R/G hold the endpoint's draw time,
+    // A marks pixels belonging to an actual traced line; weak detached sketches
+    // have A=0 and therefore never leak through at the end of the animation.
+    for(const ep of g.capEnds){
+      const raw=g.sid[ep.i],j=raw>=0?g.rank[raw]:-1,S2=j>=0?T[j]:null;
+      if(!S2)continue;
+      const last=S2.X.length-1,ds=Math.hypot(ep.x-S2.X[0],ep.y-S2.Y[0]),de=Math.hypot(ep.x-S2.X[last],ep.y-S2.Y[last]);
+      const pathP=ds<=de?0:1,directedP=S2.rev?1-pathP:pathP;
+      const v=lerp(tS[j*2],tS[j*2+1],inv(directedP)),q=Math.round(clamp(v,0,1)*65535);
+      const x0=Math.max(0,Math.floor(ep.x-ep.r-1)),x1=Math.min(g.W-1,Math.ceil(ep.x+ep.r+1));
+      const y0=Math.max(0,Math.floor(ep.y-ep.r-1)),y1=Math.min(g.H-1,Math.ceil(ep.y+ep.r+1));
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const dist=Math.hypot(x+.5-ep.x,y+.5-ep.y),cov=clamp(ep.r+.5-dist,0,1);
+        if(cov<=data[(y*g.W+x)*4+2]/255)continue;
+        const k=(y*g.W+x)*4;
+        data[k]=q>>8;data[k+1]=q&255;data[k+2]=Math.round(cov*255);
+      }
+    }
     TX={key,data,W:g.W,H:g.H}}
   I.tex=TX;return I}
 /* where the inking tool is at plan time c, or null once the inking is over */
