@@ -86,9 +86,9 @@ export function renderAt(v){
 /* inking: the lines appear where the black tool has passed (each line pixel knows its moment, see core/inking.js) */
 let inkTex=null,inkKey=null;
 function inkUniforms(c){const I=plan.ink,u=paperShader.uniforms;
-  if(!I||c>=I.c1){u.uInkP=2;return}
+  if(!I){u.uInkP=-2;return}
   if(!inkTex||inkKey!==I.tex.key||inkTex.baseTexture.destroyed){if(inkTex)inkTex.destroy(true);inkTex=PIXI.Texture.fromBuffer(I.tex.data,I.tex.W,I.tex.H,{scaleMode:PIXI.SCALE_MODES.NEAREST,alphaMode:PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,mipmap:PIXI.MIPMAP_MODES.OFF});inkKey=I.tex.key}
-  u.uInk=inkTex;u.uInkP=(c-I.c0)/I.dur;u.uInkW=.06/I.dur}
+  u.uInk=inkTex;u.uInkP=c>=I.c1?2:(c-I.c0)/I.dur;u.uInkW=.06/I.dur}
 /* the tool smears along its motion like it would with a real shutter (180°: half a frame of travel).
    Uses Pixi's own blur filter (split into x and y strength along the motion), always attached so nothing toggles. */
 export let penMB=null;
