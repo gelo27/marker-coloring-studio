@@ -136,7 +136,12 @@ void main(){
   if(uLineFit>1.){float sd=(texture2D(uLineSD,vUv).r-.5)*2.*uSdR,crisp=clamp(sd*uLineFit+.5,0.,1.);
     l=mix(l,max(crisp,l*(1.-smoothstep(-1.6,-.6,sd))),smoothstep(1.,1.5,uLineFit));}
   // inking: a line pixel shows only once the black tool has passed it
-  if(uInkP<1.5&&uFlat<.5){vec4 it=texture2D(uInk,vUv);float tt=(it.r*65280.+it.g*255.)/65535.;l*=1.-smoothstep(uInkP-uInkW,uInkP,tt);}
+  if(uInkP> -1.5&&uFlat<.5){
+    vec4 it=texture2D(uInk,vUv);
+    // A masks only pixels connected to a real stroke; B adds the rounded terminal caps.
+    l=max(l*it.a,it.b);
+    if(uInkP<1.5){float tt=(it.r*65280.+it.g*255.)/65535.;l*=1.-smoothstep(uInkP-uInkW,uInkP,tt);}
+  }
   col=mix(col,vec3(.16,.12,.19)*(.92+.16*g),l*.97);
   float d=(px.x*.62+px.y*.78)/1500.-uShine;float band=exp(-d*d/.0035);
   col+=vec3(1.,.97,.93)*band*.28*clamp(c.a,0.,1.)*(.7+.6*p1);
