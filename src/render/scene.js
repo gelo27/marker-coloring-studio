@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import {plan,viewFit} from '../core/plan.js';
-import {DESK,DUO,FLQ,FORMATS,GLT,OVS,PUFF,S,TOOLS,TOOL_IDS,U,fxOff,previewScale,setOVS,view} from '../core/settings.js';
+import {CAUSTICS,DESK,DUO,FLQ,FORMATS,GLT,OVS,PUFF,S,TOOLS,TOOL_IDS,U,fxOff,previewScale,setOVS,view} from '../core/settings.js';
 import {$,SS,clamp,hex,lerp,mk,rngOf,smooth} from '../core/utils.js';
 import {seg,zones} from '../core/zones.js';
 import {resetGrains} from './glitter.js';
@@ -56,7 +56,7 @@ export let heightRT=null,heightSpr=null,heightBox=null,heightDirty=true,paperC=n
 export function buildScene(){
   world.removeChildren();
   const W=seg.W,H=seg.H;
-  deskMesh=new PIXI.Mesh(quad(-W*3,-H*3,W*4,H*4),PIXI.Shader.from(VERT,DESK_FRAG,{uPattern:patTex,uDesk:DESK.tex||emptyTex,uTint:[.80,.87,.84],uSS:SS,uMode:0,uTexSize:[512,512],uScale:1,uRect:[0,0,1,1],uBright:1,uBlur:0}));updateDesk();world.addChild(deskMesh);
+  deskMesh=new PIXI.Mesh(quad(-W*3,-H*3,W*4,H*4),PIXI.Shader.from(VERT,DESK_FRAG,{uPattern:patTex,uDesk:DESK.tex||emptyTex,uTint:[.80,.87,.84],uSS:SS,uMode:0,uTexSize:[512,512],uScale:1,uRect:[0,0,1,1],uBright:1,uBlur:0,uTime:0,uCausticsOn:0,uCausticsStrength:CAUSTICS.strength,uCausticsScale:CAUSTICS.scale,uCausticsSpeed:CAUSTICS.speed,uCausticsChromatic:CAUSTICS.chromatic}));updateDesk();world.addChild(deskMesh);
   paperC=new PIXI.Container();paperC.pivot.set(W/2,H/2);paperC.position.set(W/2,H/2);world.addChild(paperC);
   const sh=new PIXI.Graphics();sh.beginFill(0x20302a,.35);sh.drawRect(10*SS,16*SS,W,H);sh.endFill();sh.filters=[new PIXI.BlurFilter(26*SS,4)];paperC.addChild(sh);
   if(!paramTex)paramTex=buildParamTex();
@@ -66,13 +66,14 @@ export function buildScene(){
   // the lines' distance field keeps their edges crisp in close-ups
   lineSdTex=PIXI.Texture.from(seg.lineTexCv.sd||(seg.lineTexCv.sd=lineSdf(seg.lineTexCv)));lineSdTex.baseTexture.mipmap=PIXI.MIPMAP_MODES.OFF;lineSdTex.baseTexture.scaleMode=PIXI.SCALE_MODES.LINEAR;
   selCv=mk(W>>1,H>>1);selCtx=selCv.getContext('2d');selTex=PIXI.Texture.from(selCv);
-  paperShader=PIXI.Shader.from(VERT,PAPER_FRAG,{uColor:colorTex,uLine:lineTex,uLineSD:lineSdTex,uLineFit:0,uSdR:SD_RANGE,uPattern:patTex,uSel:selTex,uSelOn:0,uTime:0,uWet0:emptyTex,uWet1:emptyTex,uWetRect0:[0,0,0,0],uWetRect1:[0,0,0,0],uWetStr:0,uTexel:[1/W,1/H],uRelief:0,uCamPhase:0,uNS:7.5,uGloss:1,uHeight:emptyTex,uMat:matTex,uParams:paramTex,uGlit:glitTex,uDefMat:0,uFlat:0,uPxS:1,uCamV:0,uDuoShift:DUO.shift,uGlitDens:GLT.dens,uPatStr:U.patStr,uPatScale:U.patScale,uGrain:U.grain,uShine:-1,uSS:SS,uInk:emptyTex,uInkP:2,uInkW:.01});
+  paperShader=PIXI.Shader.from(VERT,PAPER_FRAG,{uColor:colorTex,uLine:lineTex,uLineSD:lineSdTex,uLineFit:0,uSdR:SD_RANGE,uPattern:patTex,uSel:selTex,uSelOn:0,uTime:0,uWet0:emptyTex,uWet1:emptyTex,uWetRect0:[0,0,0,0],uWetRect1:[0,0,0,0],uWetStr:0,uTexel:[1/W,1/H],uRelief:0,uCamPhase:0,uNS:7.5,uGloss:1,uHeight:emptyTex,uMat:matTex,uParams:paramTex,uGlit:glitTex,uDefMat:0,uFlat:0,uPxS:1,uCamV:0,uDuoShift:DUO.shift,uGlitDens:GLT.dens,uPatStr:U.patStr,uPatScale:U.patScale,uGrain:U.grain,uShine:-1,uSS:SS,uInk:emptyTex,uInkP:2,uInkW:.01,uCausticsOn:0,uCausticsStrength:CAUSTICS.strength,uCausticsScale:CAUSTICS.scale,uCausticsSpeed:CAUSTICS.speed,uCausticsChromatic:CAUSTICS.chromatic});
   paperMesh=new PIXI.Mesh(quad(0,0,W,H),paperShader);paperC.addChild(paperMesh);
   if(heightRT){heightRT.destroy(true);heightRT=null}
   heightRT=PIXI.RenderTexture.create({width:Math.ceil(W/2),height:Math.ceil(H/2)});
   heightSpr=new PIXI.Sprite(colorTex);heightSpr.scale.set(.5);heightSpr.filters=[new PIXI.BlurFilter(7,4)];heightBox=new PIXI.Container();heightBox.addChild(heightSpr);
   paperShader.uniforms.uHeight=heightRT;heightDirty=true;
   sparkG=new PIXI.Container();paperC.addChild(sparkG);
+  updateCaustics();
   setToolSprite();
 }
 export const SPR={};export let sprTool=null,jarC=null,jarTint=[],parts=[];
@@ -107,6 +108,19 @@ export function buildParamTex(){const ids=TOOL_IDS(),d={data:new Uint8Array(16*3
   return PIXI.Texture.fromBuffer(d.data,16,3,{scaleMode:PIXI.SCALE_MODES.NEAREST,alphaMode:PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA})}
 export let paramTex=null;
 export function buildSparkles(){sparkG.removeChildren();(plan.sparkles||[]).forEach(s=>{const g=makeSparkle();g.position.set(s.x,s.y);g.scale.set(0);s.g=g;sparkG.addChild(g)})}
+export function updateCaustics(){
+  const apply=(shader,surfaceOn)=>{
+    if(!shader)return;
+    const u=shader.uniforms;
+    u.uCausticsOn=CAUSTICS.on&&surfaceOn&&!fxOff()?1:0;
+    u.uCausticsStrength=CAUSTICS.strength;
+    u.uCausticsScale=CAUSTICS.scale;
+    u.uCausticsSpeed=CAUSTICS.speed;
+    u.uCausticsChromatic=CAUSTICS.chromatic;
+  };
+  apply(paperShader,CAUSTICS.paper);
+  apply(deskMesh&&deskMesh.shader,CAUSTICS.desk);
+}
 export function updateDesk(){
   if(!deskMesh||!seg)return;const u=deskMesh.shader.uniforms,n=hex(DESK.tint);
   u.uTint=[((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255];u.uBright=DESK.bright;u.uBlur=DESK.blur;u.uScale=DESK.scale;

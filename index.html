@@ -422,6 +422,24 @@
       </details>
 
       <details data-tab="page" open>
+        <summary>Каустика та хроматична аберація <span class="badge" id="cauBadge">увімк.</span></summary>
+        <div class="body">
+          <label class="switch"><input type="checkbox" id="cauOn" checked> Увімкнути ефект</label>
+          <label class="switch"><input type="checkbox" id="cauPaper" checked> На аркуші</label>
+          <label class="switch"><input type="checkbox" id="cauDesk" checked> На столі</label>
+          <div class="row"><label for="cauStrength">Сила каустики</label><span class="val" id="cauStrengthV">0.42</span></div>
+          <input type="range" id="cauStrength" min="0" max="1" step="0.05" value="0.42">
+          <div class="row"><label for="cauScale">Масштаб візерунка</label><span class="val" id="cauScaleV">1.0×</span></div>
+          <input type="range" id="cauScale" min="0.5" max="2" step="0.05" value="1">
+          <div class="row"><label for="cauSpeed">Швидкість анімації</label><span class="val" id="cauSpeedV">0.80</span></div>
+          <input type="range" id="cauSpeed" min="0" max="2" step="0.05" value="0.8">
+          <div class="row"><label for="cauChromatic">Хроматична аберація</label><span class="val" id="cauChromaticV">40%</span></div>
+          <input type="range" id="cauChromatic" min="0" max="1" step="0.05" value="0.4">
+          <p class="hint">Рухомі світлові переливи з RGB-зсувом. Аркуш і стіл можна налаштовувати незалежно.</p>
+        </div>
+      </details>
+
+      <details data-tab="page" open>
         <summary>Текстура</summary>
         <div class="body">
           <div class="row"><label for="pstr">Видимість патерну</label><span class="val" id="pstrV">0.45</span></div>

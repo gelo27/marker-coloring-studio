@@ -2,7 +2,7 @@ precision highp float;varying vec2 vUv;varying vec2 vPos;
 uniform sampler2D uColor;uniform sampler2D uLine;uniform sampler2D uLineSD;uniform float uLineFit;uniform float uSdR;uniform sampler2D uPattern;uniform sampler2D uSel;uniform sampler2D uMat;uniform sampler2D uParams;uniform sampler2D uGlit;uniform sampler2D uHeight;
 uniform sampler2D uWet0;uniform sampler2D uWet1;uniform vec4 uWetRect0;uniform vec4 uWetRect1;uniform float uWetStr;
 uniform float uPatStr;uniform float uPatScale;uniform float uGrain;uniform float uShine;uniform float uSS;uniform float uSelOn;uniform float uTime;uniform vec2 uTexel;
-uniform float uCamV;uniform float uRelief;uniform float uCamPhase;uniform float uNS;uniform float uGloss;uniform float uDefMat;uniform float uFlat;uniform float uPxS;uniform float uDuoShift;uniform float uGlitDens;uniform sampler2D uInk;uniform float uInkP;uniform float uInkW;
+uniform float uCamV;uniform float uRelief;uniform float uCamPhase;uniform float uNS;uniform float uGloss;uniform float uDefMat;uniform float uFlat;uniform float uPxS;uniform float uDuoShift;uniform float uGlitDens;uniform sampler2D uInk;uniform float uInkP;uniform float uInkW;uniform float uCausticsOn;uniform float uCausticsStrength;uniform float uCausticsScale;uniform float uCausticsSpeed;uniform float uCausticsChromatic;
 #include noise
 float worley(vec2 p){vec2 i=floor(p),f=fract(p);float d=1.5;for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 g=vec2(float(x),float(y));vec2 o=vec2(hash(i+g),hash(i+g+19.31));d=min(d,length(g+o-f));}return d;}
 vec3 paintify(vec3 c){float l=dot(c,vec3(.299,.587,.114));c=clamp(mix(vec3(l),c,1.45),0.,1.);return mix(c,smoothstep(0.,1.,c),.5);}
@@ -130,6 +130,7 @@ void main(){
     vec3 base=col*(1.-.25*cv);
     col=mix(col,glitterOn(px,base,viv,.62,mGlit),cv);
   }
+  if(uCausticsOn>.5)col=applyCaustics(col,px,uTime,uCausticsStrength,uCausticsScale,uCausticsSpeed,uCausticsChromatic);
   float l=texture2D(uLine,vUv).a;
   // magnified (more than a screen pixel per texel): the edge comes from the distance field, one screen pixel soft.
   // Faint lines that never reach half darkness have no contour: away from any contour the texture is kept for them.

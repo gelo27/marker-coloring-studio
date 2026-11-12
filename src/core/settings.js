@@ -69,6 +69,7 @@ export function setOVS(v){OVS=v}
 export const DUO={shift:2.094},GLT={dens:.88};
 export const PUFF={ns:7.5,gloss:1};
 export const DESK={mode:'default',tex:null,iw:1,ih:1,scale:1,bright:1,blur:0,tint:'#ccded6'};
+export const CAUSTICS={on:true,paper:true,desk:true,strength:.42,scale:1,speed:.8,chromatic:.4};
 export const FLQ={prev:140,render:320,res:140,mix:2,blooms:true,drops:true,cine:true,gloss:true};
 export const OUT={on:false,dur:6,color:'#e3263b',text:'SUBSCRIBE',style:'hand'},OUTRO_TR=1.0,OUT_FONT='"Permanent Marker","Marker Felt","Comic Sans MS",cursive';
 export const IMP={thr:.38,useColors:true,lineK:.42,minArea:95,inkTiny:true,vec:true,vecSm:1};

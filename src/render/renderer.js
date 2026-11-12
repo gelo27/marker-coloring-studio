@@ -9,7 +9,7 @@ import {P2W,PR,cam,penState,setPR} from './camera.js';
 import {GL,updateParts} from './glitter.js';
 import {OC,outroAt} from './outro.js';
 import {flushPaint,paintAt,wetAt} from './paint.js';
-import {app,jarC,jarTint,liqDropAt,markHeightDirty,paperC,paperShader,penC,penShadow,penTint,post,postShader,renderHeight,sceneRT,useSprite,world} from './scene.js';
+import {app,deskMesh,jarC,jarTint,liqDropAt,markHeightDirty,paperC,paperShader,penC,penShadow,penTint,post,postShader,renderHeight,sceneRT,updateCaustics,useSprite,world} from './scene.js';
 import {airAt,airC,airLand,pushSweep} from './airParts.js';
 import {snowAt,snowC,snowLand} from './snow.js';
 import {shadowHover} from './toolSprites.js';
@@ -37,7 +37,7 @@ export function renderAt(v){
   if(flushPaint())markHeightDirty();
   paperShader.uniforms.uFlat=0;paperShader.uniforms.uPxS=viewFit()*cam.z*SS;paperShader.uniforms.uLineFit=viewFit()*cam.z;
   if(plan.hasThick)renderHeight();
-  paperShader.uniforms.uSelOn=0;paperShader.uniforms.uTime=v;inkUniforms(c);
+  paperShader.uniforms.uSelOn=0;paperShader.uniforms.uTime=v;if(deskMesh)deskMesh.shader.uniforms.uTime=v;updateCaustics();inkUniforms(c);
   {const dv=cam.rv==null?0:clamp(v-cam.rv,0,.1),fz=viewFit()*cam.z;const dz=cam.rz==null||dv<=0?0:Math.abs(cam.z-cam.rz)/dv;
    const spd=Math.hypot(cam.vx,cam.vy)*fz+dz*500;cam.phase+=dv*(.7+spd*.014);cam.rv=v;cam.rz=cam.z;paperShader.uniforms.uCamPhase=cam.phase;
    paperShader.uniforms.uCamV=(cam.x/seg.W)*2.4+(cam.y/seg.H)*1.7+Math.log(Math.max(.2,cam.z))*1.3+(PR||0)*1.5}
