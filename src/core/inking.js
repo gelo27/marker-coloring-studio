@@ -100,7 +100,16 @@ function geometry(seg){
   // Endpoints and junctions form the graph's vertices.
   for(const i of fg){
     if(!sk[i])continue;
-    if(degree[i]===0){raw.push([i]);continue}
+    if(degree[i]===0){
+      // A real isolated mark (such as the dot above a letter) has a small ink blob
+      // around its skeleton pixel. Ignore one-pixel scan dust.
+      let support=0,x=i%W,y=(i-x)/W;
+      for(let yy=Math.max(0,y-1);yy<=Math.min(H-1,y+1);yy++)
+        for(let xx=Math.max(0,x-1);xx<=Math.min(W-1,x+1);xx++)
+          if(A[yy*W+xx]>24)support++;
+      if(support>=3)raw.push([i]);
+      continue;
+    }
     if(degree[i]===2)continue;
     for(let k=0;k<8;k++){
       const q=neighbours(i,k);
@@ -320,7 +329,8 @@ export function inkPlan(seg,c0){
   if(!TX||TX.key!==key){const tS=new Float32Array(T.length*2);st.forEach((q,k)=>{tS[k*2]=(q.t0-c0)/I.dur;tS[k*2+1]=(q.t1-c0)/I.dur});
     const data=new Uint8Array(g.N*4),inv=p=>{let x=p;for(let it=0;it<5;it++){const s=smooth(x),F=.5*x+.5*s-p,dF=.5+3*x*(1-x);x=clamp(x-F/Math.max(.2,dF),0,1)}return x};
     for(let i=0;i<g.N;i++){if(!g.A[i])continue;const o=g.own[i];let v=1;
-      if(o>=0){const j=g.rank[g.sid[o]],S2=T[j];let p=S2.len>0?g.sarc[o]/S2.len:0;if(S2.rev)p=1-p;v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)))}
+      if(o===-2)v=0; // tiny isolated scan specks stay with the paper instead of popping in after the tool leaves
+      else if(o>=0){const j=g.rank[g.sid[o]],S2=T[j];let p=S2.len>0?g.sarc[o]/S2.len:0;if(S2.rev)p=1-p;v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)))}
       const q=Math.round(clamp(v,0,1)*65535);data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255}
     TX={key,data,W:g.W,H:g.H}}
   I.tex=TX;return I}
