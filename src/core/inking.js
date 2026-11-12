@@ -66,6 +66,34 @@ function geometry(seg){
     degree[i]=n;
   }
 
+  // Local half-width around real graph nodes. This is used only to union the
+  // reveal time of existing line pixels near a junction; it never expands ink.
+  const nodePads=[];
+  for(const i of fg){
+    if(!sk[i]||degree[i]<1||degree[i]===2)continue;
+    const x=i%W,y=(i-x)/W,widths=[];
+    for(let k=0;k<8;k++){
+      if(neighbours(i,k)<0)continue;
+      const dx=DX[k],dy=DY[k],nx=-dy,ny=dx,sx=x+dx*6,sy=y+dy*6;
+      let a=0,b=0;
+      for(let r=1;r<=18;r++){
+        const xx=Math.round(sx+nx*r),yy=Math.round(sy+ny*r);
+        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
+        a=r;
+      }
+      for(let r=1;r<=18;r++){
+        const xx=Math.round(sx-nx*r),yy=Math.round(sy-ny*r);
+        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
+        b=r;
+      }
+      widths.push(a+b+1);
+    }
+    if(!widths.length)continue;
+    widths.sort((a,b)=>a-b);
+    const w=widths[Math.floor((widths.length-1)*.5)];
+    nodePads.push({i,x:i%W+.5,y:(i/W|0)+.5,r:clamp(w*.55+1,2,10)});
+  }
+
   // Trace every graph edge exactly once. A stroke runs from one endpoint/junction
   // to the next. At junctions the shared node is included in both paths, allowing
   // the pen to continue through the meeting point without leaving a visible gap.
@@ -300,7 +328,7 @@ function geometry(seg){
   }
 
   const rank=new Int32Array(n);order.forEach((j,k)=>rank[j]=k);
-  G={seg,W,H,N,A,own,sid,sarc,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
+  G={seg,W,H,N,A,own,sid,sarc,nodePads,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
   return G;
 }
 /* the inking phase of a plan: strokes with their times (plan time), starting at c0 */
@@ -351,13 +379,30 @@ export function inkPlan(seg,c0){
       if(!S2)continue;
       let p=S2.len>0?g.sarc[o]/S2.len:0;
       if(S2.rev)p=1-p;
-      let v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
-      // Only the one-pixel skeleton vertex uses the shared arrival time.
-      // Its neighbouring antialiased pixels retain their own raster coverage
-      // and path timing, avoiding a visible circular blob.
-      if(o===i&&nodeTime.has(i))v=Math.min(v,nodeTime.get(i));
+      const v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
       const q=Math.round(clamp(v,0,1)*65535);
       data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255;
+    }
+
+    // UNION the physical marker footprint at a junction: a raster line pixel
+    // belongs to the earliest incident stroke that could cover it. We only
+    // change timestamps for pixels already present in the source line mask;
+    // no circles, extra alpha, or thicker outlines are introduced.
+    for(const node of g.nodePads){
+      const v=nodeTime.get(node.i);
+      if(v==null)continue;
+      const time=Math.round(clamp(v,0,1)*65535);
+      const x0=Math.max(0,Math.floor(node.x-node.r)),x1=Math.min(g.W-1,Math.ceil(node.x+node.r));
+      const y0=Math.max(0,Math.floor(node.y-node.r)),y1=Math.min(g.H-1,Math.ceil(node.y+node.r));
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const dx=x+.5-node.x,dy=y+.5-node.y;
+        if(dx*dx+dy*dy>node.r*node.r)continue;
+        const k=(y*g.W+x)*4;
+        if(!g.A[y*g.W+x]||data[k+3]===0)continue;
+        const old=(data[k]*256+data[k+1]);
+        if(time>=old)continue;
+        data[k]=time>>8;data[k+1]=time&255;
+      }
     }
     TX={key,data,W:g.W,H:g.H}
   }  I.tex=TX;return I}
