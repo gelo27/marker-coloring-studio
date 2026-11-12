@@ -66,35 +66,6 @@ function geometry(seg){
     degree[i]=n;
   }
 
-  // Build a single rounded footprint for every graph endpoint and junction.
-  // This joins neighbouring graph edges physically, rather than letting each edge
-  // terminate as an independent flat/pointed fragment.
-  const capNodes=[];
-  for(const i of fg){
-    if(!sk[i]||degree[i]===2||degree[i]===0)continue;
-    const x=i%W+.5,y=(i/W|0)+.5,widths=[];
-    for(let k=0;k<8;k++){
-      if(neighbours(i,k)<0)continue;
-      const dx=DX[k],dy=DY[k],nx=-dy,ny=dx,sx=x+dx*5,sy=y+dy*5;
-      let a=0,b=0;
-      for(let r=1;r<=24;r++){
-        const xx=Math.round(sx+nx*r-.5),yy=Math.round(sy+ny*r-.5);
-        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
-        a=r;
-      }
-      for(let r=1;r<=24;r++){
-        const xx=Math.round(sx-nx*r-.5),yy=Math.round(sy-ny*r-.5);
-        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
-        b=r;
-      }
-      widths.push((a+b+1)*.5);
-    }
-    if(!widths.length)continue;
-    widths.sort((a,b)=>a-b);
-    const radius=clamp(widths[Math.floor((widths.length-1)*.35)]+.5,2,18);
-    capNodes.push({i,x,y,r:radius});
-  }
-
   // Trace every graph edge exactly once. A stroke runs from one endpoint/junction
   // to the next. At junctions the shared node is included in both paths, allowing
   // the pen to continue through the meeting point without leaving a visible gap.
@@ -329,7 +300,7 @@ function geometry(seg){
   }
 
   const rank=new Int32Array(n);order.forEach((j,k)=>rank[j]=k);
-  G={seg,W,H,N,A,own,sid,sarc,capNodes,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
+  G={seg,W,H,N,A,own,sid,sarc,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
   return G;
 }
 /* the inking phase of a plan: strokes with their times (plan time), starting at c0 */
@@ -345,22 +316,13 @@ export function inkPlan(seg,c0){
   const I={c0,c1:t,dur:t-c0,st,tool:INK.tool||'marker',color:INK_COLOR,start:st[0].a,end:st[st.length-1].b};
   // the moment each line pixel is drawn (0..1 of the phase, 16 bits in red and green); cached while the timing holds
   const key=g.id+'|'+f.toFixed(6);
-  if(!TX||TX.key!==key){const tS=new Float32Array(T.length*2);st.forEach((q,k)=>{tS[k*2]=(q.t0-c0)/I.dur;tS[k*2+1]=(q.t1-c0)/I.dur});
-    const data=new Uint8Array(g.N*4),inv=p=>{let x=p;for(let it=0;it<5;it++){const s=smooth(x),F=.5*x+.5*s-p,dF=.5+3*x*(1-x);x=clamp(x-F/Math.max(.2,dF),0,1)}return x};
-    for(let i=0;i<g.N;i++){
-      const o=g.own[i];
-      if(o<0||g.sid[o]<0)continue;
-      const j=g.rank[g.sid[o]],S2=T[j];
-      if(!S2)continue;
-      let p=S2.len>0?g.sarc[o]/S2.len:0;
-      if(S2.rev)p=1-p;
-      const v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
-      const q=Math.round(clamp(v,0,1)*65535);
-      data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255;
-    }
-    // Map each shared graph node to the earliest time any connected stroke reaches it.
-    // This makes a junction a single marker footprint: no separate partial caps,
-    // no tiny white wedges, and no doubled thickness from drawing a second full path.
+  if(!TX||TX.key!==key){
+    const tS=new Float32Array(T.length*2);
+    st.forEach((q,k)=>{tS[k*2]=(q.t0-c0)/I.dur;tS[k*2+1]=(q.t1-c0)/I.dur});
+
+    // A graph junction is shared by all incident branches. Give its single centre
+    // pixel the time of the first arriving branch; do not draw a circular patch
+    // over the outline, which creates visible marker-like bulbs at the joins.
     const nodeTime=new Map();
     const addNodeTime=(id,v)=>{
       if(id==null)return;
@@ -373,21 +335,32 @@ export function inkPlan(seg,c0){
       addNodeTime(S2.rev?S2.nodeB:S2.nodeA,(q.t0-c0)/I.dur);
       addNodeTime(S2.rev?S2.nodeA:S2.nodeB,(q.t1-c0)/I.dur);
     });
-    for(const ep of g.capNodes){
-      const v=nodeTime.get(ep.i);
-      if(v==null)continue;
-      const q=Math.round(clamp(v,0,1)*65535);
-      const x0=Math.max(0,Math.floor(ep.x-ep.r-1)),x1=Math.min(g.W-1,Math.ceil(ep.x+ep.r+1));
-      const y0=Math.max(0,Math.floor(ep.y-ep.r-1)),y1=Math.min(g.H-1,Math.ceil(ep.y+ep.r+1));
-      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-        const dist=Math.hypot(x+.5-ep.x,y+.5-ep.y),cov=clamp(ep.r+.5-dist,0,1);
-        if(cov<=data[(y*g.W+x)*4+2]/255)continue;
-        const k=(y*g.W+x)*4;
-        data[k]=q>>8;data[k+1]=q&255;data[k+2]=Math.round(cov*255);
+
+    const data=new Uint8Array(g.N*4),inv=p=>{
+      let x=p;
+      for(let it=0;it<5;it++){
+        const s=smooth(x),F=.5*x+.5*s-p,dF=.5+3*x*(1-x);
+        x=clamp(x-F/Math.max(.2,dF),0,1);
       }
+      return x;
+    };
+    for(let i=0;i<g.N;i++){
+      const o=g.own[i];
+      if(o<0||g.sid[o]<0)continue;
+      const j=g.rank[g.sid[o]],S2=T[j];
+      if(!S2)continue;
+      let p=S2.len>0?g.sarc[o]/S2.len:0;
+      if(S2.rev)p=1-p;
+      let v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
+      // Only the one-pixel skeleton vertex uses the shared arrival time.
+      // Its neighbouring antialiased pixels retain their own raster coverage
+      // and path timing, avoiding a visible circular blob.
+      if(o===i&&nodeTime.has(i))v=Math.min(v,nodeTime.get(i));
+      const q=Math.round(clamp(v,0,1)*65535);
+      data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255;
     }
-    TX={key,data,W:g.W,H:g.H}}
-  I.tex=TX;return I}
+    TX={key,data,W:g.W,H:g.H}
+  }  I.tex=TX;return I}
 /* where the inking tool is at plan time c, or null once the inking is over */
 export function inkPen(I,c,introWide){
   const st=I.st,base={color:I.color,tool:I.tool,ink:true};
