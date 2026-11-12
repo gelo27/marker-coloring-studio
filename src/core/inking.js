@@ -66,29 +66,33 @@ function geometry(seg){
     degree[i]=n;
   }
 
-  // Round only true stroke ends (degree 1), never junctions. Estimate the cap
-  // radius across the local normal, so thin pencil lines and thick markers both fit.
-  const capEnds=[];
+  // Build a single rounded footprint for every graph endpoint and junction.
+  // This joins neighbouring graph edges physically, rather than letting each edge
+  // terminate as an independent flat/pointed fragment.
+  const capNodes=[];
   for(const i of fg){
-    if(!sk[i]||degree[i]!==1)continue;
-    let q=-1;
-    for(let k=0;k<8;k++){const p=neighbours(i,k);if(p>=0){q=p;break}}
-    if(q<0)continue;
-    const x=i%W+.5,y=(i/W|0)+.5,qx=q%W+.5,qy=(q/W|0)+.5;
-    const dx=qx-x,dy=qy-y,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
-    const sample=sign=>{
-      let last=0;
-      for(let r=1;r<=32;r++){
-        const xx=Math.round(x+dx/L*.75+nx*r*sign-.5);
-        const yy=Math.round(y+dy/L*.75+ny*r*sign-.5);
-        if(xx<0||xx>=W||yy<0||yy>=H)break;
-        if(A[yy*W+xx]>=45)last=r;
-        else if(r>last+1)break;
+    if(!sk[i]||degree[i]===2||degree[i]===0)continue;
+    const x=i%W+.5,y=(i/W|0)+.5,widths=[];
+    for(let k=0;k<8;k++){
+      if(neighbours(i,k)<0)continue;
+      const dx=DX[k],dy=DY[k],nx=-dy,ny=dx,sx=x+dx*5,sy=y+dy*5;
+      let a=0,b=0;
+      for(let r=1;r<=24;r++){
+        const xx=Math.round(sx+nx*r-.5),yy=Math.round(sy+ny*r-.5);
+        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
+        a=r;
       }
-      return last;
-    };
-    const a=sample(-1),b=sample(1),radius=clamp((a+b)*.5+1,1.5,32);
-    capEnds.push({i,x,y,r:radius});
+      for(let r=1;r<=24;r++){
+        const xx=Math.round(sx-nx*r-.5),yy=Math.round(sy-ny*r-.5);
+        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
+        b=r;
+      }
+      widths.push((a+b+1)*.5);
+    }
+    if(!widths.length)continue;
+    widths.sort((a,b)=>a-b);
+    const radius=clamp(widths[Math.floor((widths.length-1)*.35)]+.5,2,18);
+    capNodes.push({i,x,y,r:radius});
   }
 
   // Trace every graph edge exactly once. A stroke runs from one endpoint/junction
@@ -193,7 +197,7 @@ function geometry(seg){
       const i=px[k];
       if(sid[i]<0){sid[i]=j;sarc[i]=s[k]/sL*L}
     }
-    strokes.push({X,Y,cum,len:cum[cum.length-1]});
+    strokes.push({X,Y,cum,len:cum[cum.length-1],nodeA:px[0],nodeB:px[n-1]});
   }
 
   // Assign every antialiased line pixel to its nearest skeleton stroke using a
@@ -325,7 +329,7 @@ function geometry(seg){
   }
 
   const rank=new Int32Array(n);order.forEach((j,k)=>rank[j]=k);
-  G={seg,W,H,N,A,own,sid,sarc,capEnds,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
+  G={seg,W,H,N,A,own,sid,sarc,capNodes,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
   return G;
 }
 /* the inking phase of a plan: strokes with their times (plan time), starting at c0 */
@@ -354,15 +358,25 @@ export function inkPlan(seg,c0){
       const q=Math.round(clamp(v,0,1)*65535);
       data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255;
     }
-    // Draw round caps analytically into B. R/G hold the endpoint's draw time,
-    // A marks pixels belonging to an actual traced line; weak detached sketches
-    // have A=0 and therefore never leak through at the end of the animation.
-    for(const ep of g.capEnds){
-      const raw=g.sid[ep.i],j=raw>=0?g.rank[raw]:-1,S2=j>=0?T[j]:null;
-      if(!S2)continue;
-      const last=S2.X.length-1,ds=Math.hypot(ep.x-S2.X[0],ep.y-S2.Y[0]),de=Math.hypot(ep.x-S2.X[last],ep.y-S2.Y[last]);
-      const pathP=ds<=de?0:1,directedP=S2.rev?1-pathP:pathP;
-      const v=lerp(tS[j*2],tS[j*2+1],inv(directedP)),q=Math.round(clamp(v,0,1)*65535);
+    // Map each shared graph node to the earliest time any connected stroke reaches it.
+    // This makes a junction a single marker footprint: no separate partial caps,
+    // no tiny white wedges, and no doubled thickness from drawing a second full path.
+    const nodeTime=new Map();
+    const addNodeTime=(id,v)=>{
+      if(id==null)return;
+      const prev=nodeTime.get(id);
+      if(prev==null||v<prev)nodeTime.set(id,v);
+    };
+    st.forEach(q=>{
+      const S2=q.S;
+      if(S2.nodeA==null||S2.nodeB==null)return;
+      addNodeTime(S2.rev?S2.nodeB:S2.nodeA,(q.t0-c0)/I.dur);
+      addNodeTime(S2.rev?S2.nodeA:S2.nodeB,(q.t1-c0)/I.dur);
+    });
+    for(const ep of g.capNodes){
+      const v=nodeTime.get(ep.i);
+      if(v==null)continue;
+      const q=Math.round(clamp(v,0,1)*65535);
       const x0=Math.max(0,Math.floor(ep.x-ep.r-1)),x1=Math.min(g.W-1,Math.ceil(ep.x+ep.r+1));
       const y0=Math.max(0,Math.floor(ep.y-ep.r-1)),y1=Math.min(g.H-1,Math.ceil(ep.y+ep.r+1));
       for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
