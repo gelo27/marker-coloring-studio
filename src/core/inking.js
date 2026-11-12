@@ -66,34 +66,6 @@ function geometry(seg){
     degree[i]=n;
   }
 
-  // Local half-width around real graph nodes. This is used only to union the
-  // reveal time of existing line pixels near a junction; it never expands ink.
-  const nodePads=[];
-  for(const i of fg){
-    if(!sk[i]||degree[i]<1||degree[i]===2)continue;
-    const x=i%W,y=(i-x)/W,widths=[];
-    for(let k=0;k<8;k++){
-      if(neighbours(i,k)<0)continue;
-      const dx=DX[k],dy=DY[k],nx=-dy,ny=dx,sx=x+dx*6,sy=y+dy*6;
-      let a=0,b=0;
-      for(let r=1;r<=18;r++){
-        const xx=Math.round(sx+nx*r),yy=Math.round(sy+ny*r);
-        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
-        a=r;
-      }
-      for(let r=1;r<=18;r++){
-        const xx=Math.round(sx-nx*r),yy=Math.round(sy-ny*r);
-        if(xx<0||xx>=W||yy<0||yy>=H||A[yy*W+xx]<45)break;
-        b=r;
-      }
-      widths.push(a+b+1);
-    }
-    if(!widths.length)continue;
-    widths.sort((a,b)=>a-b);
-    const w=widths[Math.floor((widths.length-1)*.5)];
-    nodePads.push({i,x:i%W+.5,y:(i/W|0)+.5,r:clamp(w*.55+1,2,10)});
-  }
-
   // Trace every graph edge exactly once. A stroke runs from one endpoint/junction
   // to the next. At junctions the shared node is included in both paths, allowing
   // the pen to continue through the meeting point without leaving a visible gap.
@@ -328,7 +300,7 @@ function geometry(seg){
   }
 
   const rank=new Int32Array(n);order.forEach((j,k)=>rank[j]=k);
-  G={seg,W,H,N,A,own,sid,sarc,nodePads,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
+  G={seg,W,H,N,A,own,sid,sarc,strokes:order.map(j=>strokes[j]),rank,id:(G?G.id:0)+1};
   return G;
 }
 /* the inking phase of a plan: strokes with their times (plan time), starting at c0 */
@@ -347,24 +319,9 @@ export function inkPlan(seg,c0){
   if(!TX||TX.key!==key){
     const tS=new Float32Array(T.length*2);
     st.forEach((q,k)=>{tS[k*2]=(q.t0-c0)/I.dur;tS[k*2+1]=(q.t1-c0)/I.dur});
-
-    // A graph junction is shared by all incident branches. Give its single centre
-    // pixel the time of the first arriving branch; do not draw a circular patch
-    // over the outline, which creates visible marker-like bulbs at the joins.
-    const nodeTime=new Map();
-    const addNodeTime=(id,v)=>{
-      if(id==null)return;
-      const prev=nodeTime.get(id);
-      if(prev==null||v<prev)nodeTime.set(id,v);
-    };
-    st.forEach(q=>{
-      const S2=q.S;
-      if(S2.nodeA==null||S2.nodeB==null)return;
-      addNodeTime(S2.rev?S2.nodeB:S2.nodeA,(q.t0-c0)/I.dur);
-      addNodeTime(S2.rev?S2.nodeA:S2.nodeB,(q.t1-c0)/I.dur);
-    });
-
-    const data=new Uint8Array(g.N*4),inv=p=>{
+    const data=new Uint8Array(g.N*4),timeMap=new Float32Array(g.N);
+    timeMap.fill(1);
+    const inv=p=>{
       let x=p;
       for(let it=0;it<5;it++){
         const s=smooth(x),F=.5*x+.5*s-p,dF=.5+3*x*(1-x);
@@ -372,6 +329,17 @@ export function inkPlan(seg,c0){
       }
       return x;
     };
+    const pathPoint=(S2,s)=>{
+      const C=S2.cum,n=C.length;
+      s=clamp(s,0,S2.len);
+      let lo=0,hi=n-1;
+      while(hi-lo>1){const m=(lo+hi)>>1;if(C[m]<=s)lo=m;else hi=m}
+      const f=C[hi]>C[lo]?clamp((s-C[lo])/(C[hi]-C[lo]),0,1):0;
+      return [lerp(S2.X[lo],S2.X[hi],f),lerp(S2.Y[lo],S2.Y[hi],f)];
+    };
+
+    // Initial owner assignment: every valid raster line pixel gets its own
+    // stroke-progress timestamp. Detached sketch noise (own === -2) remains hidden.
     for(let i=0;i<g.N;i++){
       const o=g.own[i];
       if(o<0||g.sid[o]<0)continue;
@@ -379,33 +347,59 @@ export function inkPlan(seg,c0){
       if(!S2)continue;
       let p=S2.len>0?g.sarc[o]/S2.len:0;
       if(S2.rev)p=1-p;
-      const v=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
-      const q=Math.round(clamp(v,0,1)*65535);
-      data[i*4]=q>>8;data[i*4+1]=q&255;data[i*4+3]=255;
+      timeMap[i]=lerp(tS[j*2],tS[j*2+1],inv(clamp(p,0,1)));
     }
 
-    // UNION the physical marker footprint at a junction: a raster line pixel
-    // belongs to the earliest incident stroke that could cover it. We only
-    // change timestamps for pixels already present in the source line mask;
-    // no circles, extra alpha, or thicker outlines are introduced.
-    for(const node of g.nodePads){
-      const v=nodeTime.get(node.i);
-      if(v==null)continue;
-      const time=Math.round(clamp(v,0,1)*65535);
-      const x0=Math.max(0,Math.floor(node.x-node.r)),x1=Math.min(g.W-1,Math.ceil(node.x+node.r));
-      const y0=Math.max(0,Math.floor(node.y-node.r)),y1=Math.min(g.H-1,Math.ceil(node.y+node.r));
-      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-        const dx=x+.5-node.x,dy=y+.5-node.y;
-        if(dx*dx+dy*dy>node.r*node.r)continue;
-        const k=(y*g.W+x)*4;
-        if(!g.A[y*g.W+x]||data[k+3]===0)continue;
-        const old=(data[k]*256+data[k+1]);
-        if(time>=old)continue;
-        data[k]=time>>8;data[k+1]=time&255;
+    // Sweep the real marker footprint from every skeleton sample over the
+    // ORIGINAL line mask. If two strokes cover the same raster pixel, the
+    // earliest arrival wins (union/min), so a later unpainted branch cannot
+    // leave a white seam on top of a branch that has already been inked.
+    // No pixels are added: only timestamps of existing ink coverage are merged.
+    for(let i=0;i<g.N;i++){
+      const raw=g.sid[i];
+      if(raw<0)continue;
+      const j=g.rank[raw],S2=T[j];
+      if(!S2||S2.len<=0)continue;
+      const s=g.sarc[i],p=clamp(s/S2.len,0,1),directed=S2.rev?1-p:p;
+      const stamp=lerp(tS[j*2],tS[j*2+1],inv(directed));
+
+      const before=pathPoint(S2,Math.max(0,s-3));
+      const after=pathPoint(S2,Math.min(S2.len,s+3));
+      let dx=after[0]-before[0],dy=after[1]-before[1],L=Math.hypot(dx,dy);
+      if(L<1e-3)continue;
+      dx/=L;dy/=L;
+      const nx=-dy,ny=dx,x=i%g.W,y=(i-x)/g.W;
+      let a=0,b=0;
+      for(let r=1;r<=20;r++){
+        const xx=Math.round(x+nx*r),yy=Math.round(y+ny*r);
+        if(xx<0||xx>=g.W||yy<0||yy>=g.H||g.A[yy*g.W+xx]<35)break;
+        a=r;
+      }
+      for(let r=1;r<=20;r++){
+        const xx=Math.round(x-nx*r),yy=Math.round(y-ny*r);
+        if(xx<0||xx>=g.W||yy<0||yy>=g.H||g.A[yy*g.W+xx]<35)break;
+        b=r;
+      }
+      const radius=clamp((a+b)*.5+1,1.5,16);
+      const x0=Math.max(0,Math.floor(x-radius)),x1=Math.min(g.W-1,Math.ceil(x+radius));
+      const y0=Math.max(0,Math.floor(y-radius)),y1=Math.min(g.H-1,Math.ceil(y+radius));
+      for(let yy=y0;yy<=y1;yy++)for(let xx=x0;xx<=x1;xx++){
+        const ox=xx-x,oy=yy-y;
+        if(ox*ox+oy*oy>radius*radius)continue;
+        const q=yy*g.W+xx;
+        if(g.A[q]<20||g.own[q]<0)continue;
+        if(stamp<timeMap[q])timeMap[q]=stamp;
       }
     }
-    TX={key,data,W:g.W,H:g.H}
-  }  I.tex=TX;return I}
+
+    // Pack the final minimum-reveal timestamps; retain the source alpha mask
+    // separately from the timing channels.
+    for(let i=0;i<g.N;i++){
+      if(g.own[i]<0||timeMap[i]>=1)continue;
+      const q=Math.round(clamp(timeMap[i],0,1)*65535),k=i*4;
+      data[k]=q>>8;data[k+1]=q&255;data[k+3]=255;
+    }
+    TX={key,data,W:g.W,H:g.H}  I.tex=TX;return I}
 /* where the inking tool is at plan time c, or null once the inking is over */
 export function inkPen(I,c,introWide){
   const st=I.st,base={color:I.color,tool:I.tool,ink:true};
