@@ -24,7 +24,7 @@ import {LANE,T,bindLane,busy,drawLane,loop,playFresh,playing,rebuild,seek,setLas
 import {LS_KEY,applyProject,loadImg,lsArm,lsClearAll,lsInit,lsOn,lsRead,lsSave,lsSchedule,projectData,readURL,restoreLast,setDeskImage,setLsOn,syncInk} from './ui/project.js';
 import {bindFullscreen} from './ui/stage.js';
 import {bindWizard,openFiles,syncWizard} from './ui/wizard.js';
-import {redoHistory,resetHistory,setHistoryRestoreHandler,undoHistory} from './ui/history.js';
+import {redoHistory,setHistoryRestoreHandler,undoHistory} from './ui/history.js';
 import './styles/app.css';
 import './addons/cats.js';
 import './styles/studio.css';
@@ -158,7 +158,7 @@ export function boot(){
   $('vsStyle').onchange=e=>{VS.style=e.target.value;zonesChanged(true)};
   $('vsW').oninput=e=>{$('vsWV').textContent=(+e.target.value).toFixed(2)};$('vsW').onchange=e=>{VS.w=+e.target.value;zonesChanged(true)};
   $('vsDark').oninput=e=>{$('vsDarkV').textContent=(+e.target.value).toFixed(2)};$('vsDark').onchange=e=>{VS.dark=+e.target.value;zonesChanged(true)};
-  $('render').onclick=exportVideo;$('rhCancel').onclick=()=>{REN.cancel=true;$('rhInfo').textContent='Скасовую…'};$('cancelRender').onclick=()=>{REN.cancel=true;$('renderInfo').textContent='Скасовую…'};$('save').onclick=saveVideo;
+  $('render').onclick=()=>exportVideo();$('rhCancel').onclick=()=>{REN.cancel=true;$('rhInfo').textContent='Скасовую…'};$('cancelRender').onclick=()=>{REN.cancel=true;$('renderInfo').textContent='Скасовую…'};$('save').onclick=saveVideo;
   document.addEventListener('keydown',e=>{
     if(e.code==='Space'&&e.target===document.body){e.preventDefault();togglePlay();return}
     if(busy||!(e.ctrlKey||e.metaKey))return;
