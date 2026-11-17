@@ -11,8 +11,32 @@ import {OUTF,setOutroFont} from '../render/outro.js';
 import {resetPaint} from '../render/paint.js';
 import {renderAt} from '../render/renderer.js';
 import {app,applyFormat} from '../render/scene.js';
+import {validateRender} from './validation.js';
 import {T,busy,playing,rebuild,seek,setBusy,setMode,setPlayIcon,setPlaying,setT,updateUI} from './playback.js';
 /* ================= EXPORT ================= */
+function showPreflight(report){
+  if(!report.errors.length&&!report.warnings.length)return false;
+  const modal=$('preflightModal'),list=$('preflightIssues');
+  list.innerHTML='';
+  [...report.errors,...report.warnings].forEach(item=>{
+    const li=document.createElement('li');li.className=item.type;li.textContent=item.message;list.appendChild(li);
+  });
+  $('preflightSummary').textContent=report.errors.length
+    ?'Є проблеми, які потрібно виправити перед експортом: '+report.errors.length+'. Попереджень: '+report.warnings.length+'.'
+    :'Перевірка знайшла '+report.warnings.length+' попереджень. Можна повернутися до зон або продовжити.';
+  $('preflightContinue').disabled=report.errors.length>0;
+  $('preflightContinue').textContent=report.errors.length?'Спершу виправте проблеми':'Рендерити попри попередження';
+  $('preflightClose').onclick=()=>{modal.hidden=true};
+  $('preflightFix').onclick=()=>{
+    modal.hidden=true;
+    if(!$('wiz').hidden){const step=$('steps').querySelector('[data-s="2"]');if(step)step.click()}
+    else{const section=$('zoneSec');if(section)section.open=true;setMode('zones')}
+  };
+  $('preflightContinue').onclick=()=>{modal.hidden=true;exportVideo({skipValidation:true})};
+  modal.onclick=e=>{if(e.target===modal)modal.hidden=true};
+  modal.hidden=false;return true;
+}
+
 export let lastBlob=null,lastName='',lastAudio='off';
 export async function pickCodec(w,h,fps,bitrate,webm){
   for(const codec of(webm?['vp09.00.40.08','vp09.00.10.08','vp8']:['avc1.640033','avc1.64002A','avc1.640028','avc1.4D0033','avc1.42E033','avc1.42E028'])){try{const s=await VideoEncoder.isConfigSupported({codec,width:w,height:h,bitrate,framerate:fps});if(s.supported)return codec}catch(e){}}
@@ -42,9 +66,11 @@ export function sizeNote(mb){if(toDisk())return ' · пишеться одраз
 /* expected file size for the current settings (video + 192 kb/s audio) */
 export function estimateExport(){if(!plan)return null;const res=+$('res').value,fps=+$('fps').value,[w,h]=FORMATS[view.fmt].map(v=>Math.round(v*res/1080/2)*2);
   const br=videoBitrate(w,h,fps)+(SND.on?192000:0);return{mb:br*plan.total/8/1048576,w,h,frames:Math.ceil(plan.total*fps)}}
-export async function exportVideo(){
+export async function exportVideo(options={}){
   if(busy)return;
-  if(ed.on)setMode('anim');if(planDirty)rebuild(false);
+  if(planDirty)rebuild(false);
+  if(!options.skipValidation&&showPreflight(validateRender()))return;
+  if(ed.on)setMode('anim');
   // the file is chosen first, while the click still counts as a user gesture (the browser asks for it)
   let fh=null,fws=null;
   if(toDisk()){const w0=$('vfmt').value==='webm',e0=w0?'webm':'mp4';

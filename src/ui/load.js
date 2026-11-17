@@ -10,6 +10,7 @@ import {renderOrderList,renderPal,setSegValue2} from './inspector.js';
 import {drawMarks,seek,setMode,setPlayIcon,setPlaying,setT} from './playback.js';
 import {lsSchedule} from './project.js';
 import {syncWizard} from './wizard.js';
+import {observeHistory,resetHistory} from './history.js';
 /* ================= LOAD ================= */
 /* the palette is the user's set of markers once they have changed it (or a project brought one): a new page keeps it
    and is coloured from it, instead of starting again from the default palette. A page with its own colours (a coloured
@@ -28,7 +29,7 @@ export function setArt(a,openEditor,after){
     $('artInfo').textContent=art.demo?'Демо: ведмежа на капкейку, '+zones.length+' зон.':art.colored?('Зафарбована сторінка: контури виділено автоматично, зон: '+zones.length+'.'+(imp?' Кольори взято з оригіналу для '+imp.n+' зон'+(imp.shaded?', з тінями та відблисками: '+imp.shaded:'')+(imp.blank?', '+imp.blank+' білих зон пропущено.':'.'):'')):'Знайдено зон: '+zones.length+'.'+(art.vec?' Контури векторизовано й збільшено ×'+art.vec+'.':'')+' Перевірте їх на карті й задайте кольори.';
     if(openEditor){ed.view=imp?'final':'map';setSegValue2('viewSeg',ed.view);setMode('zones')}else{setMode('anim');seek(0);drawMarks()}
     if(after)after();
-    syncWizard();
+    syncWizard();resetHistory();
   },30);
 }
 /* Re-runs the segmentation (after the user drew a contour, or changed how the page is split). Every new zone takes the settings of the old zone it
@@ -51,6 +52,6 @@ export function resegment(after){
     renderPal('palette',true);renderOrderList();renderFlyList();
     $('overlay').hidden=true;ed.dirtyPaint=true;ed.dirtySel=true;lsSchedule();
     if(after)after();
-    syncWizard();
+    syncWizard();observeHistory('Структура зон');
   },30);
 }

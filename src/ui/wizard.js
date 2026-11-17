@@ -3,10 +3,11 @@ import {SND} from '../audio/audio.js';
 import {drawMask,extractLines,loadArtFromImage,retrace} from '../core/segment.js';
 import {IMP,OUT,PREV,S,SHADE,TOOLS,isMobileUI,view} from '../core/settings.js';
 import {$,clamp,durLabel,mk} from '../core/utils.js';
-import {GROUP_RULES,applyPalette,applySrcColors,art,colorGroups,groupedOrder,nextPalSeed,orderFromGroups,orderMode,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setZoneColor,zoneByI,zones} from '../core/zones.js';
+import {GROUP_RULES,applyPalette,applySrcColors,art,colorGroups,groupedOrder,nextPalSeed,orderFromGroups,orderMode,orderedZones,pageArea,palSeed,palette,presetOrder,seg,setZoneColor,zones} from '../core/zones.js';
 import {buildDemo} from '../data/demoArt.js';
 import {drawBrush,ed} from '../editor/editor.js';
 import {ic} from './controls.js';
+import {applyToolUniforms} from '../render/scene.js';
 import {estimateExport,exportVideo,sizeNote} from './exporter.js';
 import {addToPalette,isMerged,makeSwatch,palShown,mergeSel,selZones,setOrder,setSegValue,setSegValue2,unmergeSel,updateInspector,zonesChanged} from './inspector.js';
 import {resegment,setArt} from './load.js';
@@ -17,7 +18,7 @@ import {fillToolThumbs} from './toolThumbs.js';
 /* ================= STEP-BY-STEP MODE =================
    Six steps for a casual user: picture → check the zones → colours (tap to paint) → order (colour groups) →
    camera & speed (tap a setting onto zones) → video. Every control drives the same state as the full settings panel. */
-export const WZ={step:1,brush:'#ff8fab',tag:{k:'close',v:'on'},undo:[]};
+export const WZ={step:1,brush:'#ff8fab',tag:{k:'close',v:'on'}};
 const STEPS=7;
 const zonesWord=n=>n+(n%10===1&&n%100!==11?' зона':n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?' зони':' зон');
 /* ---------- files: picture or project, from the drop zone, a picker or drag & drop anywhere ---------- */
@@ -46,7 +47,7 @@ export async function openFile(f,pair,force){
   if(!/^image\//.test(f.type)){$('wArtInfo').textContent='Це не картинка. Підійдуть PNG, JPG або WebP.';return}
   const url=await readURL(f),img=await loadImg(url),a=loadArtFromImage(img);a.srcURL=url;
   // a coloured version of the page that is already open: its colours go into the zones, the page stays (Shift + drop opens it as a new page)
-  if(!pair&&!force&&a.colored&&art&&seg&&zones.length&&sameDrawing(art.lineCv,a.lineCv)){art.refURL=url;snap(zones);applySrcColors(img);zonesChanged(true);
+  if(!pair&&!force&&a.colored&&art&&seg&&zones.length&&sameDrawing(art.lineCv,a.lineCv)){art.refURL=url;applySrcColors(img);zonesChanged(true);
     $('wArtInfo').textContent='«'+f.name+'» — розфарбована версія цієї ж сторінки: кольори зон узято з неї (Скасувати на кроці «Кольори» поверне попередні). Щоб відкрити її як нову сторінку, перетягніть її із затиснутим Shift.';gotoStep(3);return}
   // the clean line art of a page that was opened from its coloured version: cleaner lines, the same colours
   const keep=!pair&&!force&&!a.colored&&art&&art.colored&&art.srcCv&&seg&&sameDrawing(art.lineCv,a.lineCv)?art.srcCv:null;
@@ -87,19 +88,51 @@ export function gotoStep(n){
   if(isMobileUI())$('panel').scrollTo({top:0,behavior:'smooth'});
   syncWizard();
 }
-/* ---------- undo for taps (colours and settings) ---------- */
-function snap(list){WZ.undo.push(list.map(z=>({i:z.i,color:z.color,skip:z.skip,close:z.close,speed:z.speed})));if(WZ.undo.length>40)WZ.undo.shift();$('wUndo').disabled=false}
-function undo(){const s=WZ.undo.pop();if(!s)return;s.forEach(q=>{const z=zoneByI.get(q.i);if(z)Object.assign(z,{color:q.color,skip:q.skip,close:q.close,speed:q.speed})});$('wUndo').disabled=!WZ.undo.length;zonesChanged(true)}
 /* step 3: tap paints with the brush colour (null = leave unpainted); optionally every zone of the same colour */
 function paintTap(z){if(!z)return true;
   const list=$('wSame').checked?zones.filter(q=>!q.skip&&q.color.toLowerCase()===z.color.toLowerCase()):[z];if(z.skip&&!list.includes(z))list.push(z);
-  snap(list);list.forEach(q=>{if(WZ.brush==null)q.skip=true;else{q.skip=false;setZoneColor(q,WZ.brush)}});zonesChanged(true);return true}
+  list.forEach(q=>{if(WZ.brush==null)q.skip=true;else{q.skip=false;setZoneColor(q,WZ.brush)}});zonesChanged(true);return true}
 /* step 5: tap assigns the chosen camera or speed setting */
-function tagTap(z){if(!z)return true;snap([z]);z[WZ.tag.k]=WZ.tag.v;zonesChanged(true);return true}
+function tagTap(z){if(!z)return true;z[WZ.tag.k]=WZ.tag.v;zonesChanged(true);return true}
 /* ---------- rendering of each step ---------- */
 function renderWPal(){const el=$('wPal');el.innerHTML='';
   const add=(c)=>{const b=makeSwatch(c,c==null?WZ.brush==null:WZ.brush!=null&&WZ.brush.toLowerCase()===c.toLowerCase());b.onclick=()=>{WZ.brush=c;if(c)$('wColor').value=c;renderWPal()};el.appendChild(b)};
   add(null);palShown().forEach(p=>add(p.c))}
+function bulkTargets(){
+  if(!seg)return[];
+  const selected=selZones(),mode=$('wBulkTarget').value;
+  if(mode==='all')return zones.slice();
+  if(mode==='selected')return selected;
+  if(mode==='unpainted')return zones.filter(z=>z.skip);
+  if(mode==='painted')return zones.filter(z=>!z.skip);
+  if(mode==='small')return zones.filter(z=>!z.r.isBg&&z.r.area/pageArea()<=.005);
+  if(mode==='sameColor'&&selected.length){const c=(selected[0].color||'').toLowerCase();return zones.filter(z=>(z.color||'').toLowerCase()===c)}
+  return[];
+}
+function syncBulkUI(){
+  if(!$('wBulkCount'))return;
+  const count=bulkTargets().length,action=$('wBulkAction').value;
+  $('wBulkCount').textContent=count+' '+zonesWord(count);
+  $('wBulkColorRow').hidden=action!=='color';
+  $('wBulkCameraRow').hidden=action!=='camera';
+  $('wBulkSpeedRow').hidden=action!=='speed';
+  $('wBulkToolRow').hidden=action!=='tool';
+  $('wBulkHint').textContent=count?'Буде змінено: '+count+' '+zonesWord(count)+'.':'Немає зон за цим фільтром.';
+  $('wBulkApply').disabled=busy||!count;
+}
+function applyBulkEdit(){
+  if(busy)return;const list=bulkTargets();if(!list.length)return;
+  const action=$('wBulkAction').value;
+  if(action==='color')list.forEach(z=>{z.skip=false;setZoneColor(z,$('wBulkColor').value)});
+  else if(action==='skip')list.forEach(z=>z.skip=true);
+  else if(action==='paint')list.forEach(z=>z.skip=false);
+  else if(action==='camera')list.forEach(z=>z.close=$('wBulkCamera').value);
+  else if(action==='speed')list.forEach(z=>z.speed=$('wBulkSpeed').value);
+  else if(action==='tool')list.forEach(z=>z.tool=$('wBulkTool').value);
+  else if(action==='reset')list.forEach(z=>{z.skip=false;z.close='auto';z.zoom=null;z.speed='auto';z.tmul=1;z.vshade='auto';z.tool='';z.style='';z.preset='';z.fill=''});
+  if(action==='tool'||action==='reset')applyToolUniforms();
+  zonesChanged(true,'bulk-edit');syncBulkUI();
+}
 function zoneStats(){
   const el=$('wZoneStats'),wl=$('wZoneWarn');el.innerHTML='';wl.innerHTML='';if(!seg)return;
   const A=pageArea(),minA=(IMP.minArea||95)*4,tiny=seg.regs.filter(r=>r.area<minA&&r.area>16&&!r.edge).length;
@@ -143,15 +176,15 @@ export function syncWizard(){
   if(!$('wiz'))return;const n=WZ.step;
   setSegValue('wFormats',view.fmt);
   if(n===1){$('wDur').value=S.duration;$('wDurV').textContent=durLabel(S.duration);[...$('wToolGrid').children].forEach(b=>b.setAttribute('aria-checked',String(b.dataset.t===S.tool)))}
-  else if(n===2){zoneStats();if(WZ.maskUI)WZ.maskUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
+  else if(n===2){zoneStats();syncBulkUI();if(WZ.maskUI)WZ.maskUI();const col=!!(art&&art.colored);const r=$('wLineK');if(col){r.min=.15;r.max=.6;r.value=IMP.thr}else{r.min=.2;r.max=.7;r.value=IMP.lineK}$('wLineKV').textContent=(+r.value).toFixed(2);
     $('wMinArea').value=IMP.minArea;$('wMinAreaV').textContent=IMP.minArea;$('wInkTiny').checked=IMP.inkTiny!==false;setSegValue('wZoneView',ed.view==='final'?'final':'map')}
-  else if(n===3){renderWPal();$('wShadeRow').hidden=!(art&&art.colored);$('wShade').checked=SHADE.on;$('wUndo').disabled=!WZ.undo.length}
+  else if(n===3){renderWPal();$('wShadeRow').hidden=!(art&&art.colored);$('wShade').checked=SHADE.on}
   else if(n===4){$('wGroupRule').value=$('wGroupRule').value||'light';syncOrderUI()}
   else if(n===5)syncCam();
   else if(n===6)syncSound();
   else if(n===7)syncExport();
 }
-export function syncWizardSel(){const box=$('wZoneSel');if(!box)return;const sel=selZones();box.hidden=WZ.step!==2||!sel.length;if(box.hidden)return;const z=sel[0];
+export function syncWizardSel(){const box=$('wZoneSel');if(!box)return;const sel=selZones();syncBulkUI();box.hidden=WZ.step!==2||!sel.length;if(box.hidden)return;const z=sel[0];
   $('wSelDot').style.background=z.skip?'transparent':z.color;$('wSelName').textContent=sel.length===1?'Зона #'+z.i+' · '+(z.r.area/pageArea()*100).toFixed(z.r.area/pageArea()<.01?2:1)+'%':sel.length+' зон';
   $('wSelSkip').textContent=z.skip?'Замальовувати':'Не замальовувати';
   $('wSelMerge').hidden=sel.length<2;{const n=sel.length,few=n%10>=2&&n%10<=4&&(n%100<12||n%100>14);$('wSelMerge').textContent='Об\'єднати '+n+(few?' зони':' зон')+' в одну'}$('wSelUnmerge').hidden=!(sel.length===1&&isMerged(z))}
@@ -175,6 +208,9 @@ export function bindWizard(onPreview){
   $('wToolGrid').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;const t=$('toolSeg').querySelector('[data-t="'+b.dataset.t+'"]');if(t)t.click();syncWizard()};
   fillToolThumbs();
   // step 2
+  $('wBulkTool').innerHTML='<option value="">Як у проєкті</option>'+Object.keys(TOOLS).map(k=>'<option value="'+k+'">'+TOOLS[k].name+'</option>').join('');
+  $('wBulkTarget').onchange=syncBulkUI;$('wBulkAction').onchange=syncBulkUI;
+  $('wBulkApply').onclick=applyBulkEdit;syncBulkUI();
   $('wZoneView').onclick=e=>{const b=e.target.closest('button');if(!b)return;setSegValue('wZoneView',b.dataset.v);enterEditor(b.dataset.v,null)};
   $('wLineK').oninput=e=>{$('wLineKV').textContent=(+e.target.value).toFixed(2)};
   $('wMinArea').oninput=e=>{$('wMinAreaV').textContent=e.target.value};
@@ -211,12 +247,10 @@ export function bindWizard(onPreview){
   // step 3
   $('wAddColor').onclick=()=>{const c=$('wColor').value;addToPalette(c);WZ.brush=c;renderWPal()};
   $('wColor').onchange=e=>{WZ.brush=e.target.value;addToPalette(e.target.value);renderWPal()};
-  $('wUndo').onclick=undo;
-  $('wAutoPal').onclick=()=>{snap(zones);applyPalette(palSeed);zonesChanged(true)};
-  $('wShuffle').onclick=()=>{snap(zones);applyPalette(nextPalSeed());zonesChanged(true)};
-  $('wRefFile').onchange=async e=>{const f=e.target.files[0];if(!f||busy||!seg)return;const url=await readURL(f),img=await loadImg(url);art.refURL=url;snap(zones);applySrcColors(img);zonesChanged(true);e.target.value=''};
+  $('wAutoPal').onclick=()=>{applyPalette(palSeed);zonesChanged(true)};
+  $('wShuffle').onclick=()=>{applyPalette(nextPalSeed());zonesChanged(true)};
+  $('wRefFile').onchange=async e=>{const f=e.target.files[0];if(!f||busy||!seg)return;const url=await readURL(f),img=await loadImg(url);art.refURL=url;applySrcColors(img);zonesChanged(true);e.target.value=''};
   $('wShade').onchange=e=>{$('impShade').checked=e.target.checked;$('impShade').dispatchEvent(new Event('change'))};
-  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey&&(WZ.step===3||WZ.step===5)&&!$('wiz').hidden&&!/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)){e.preventDefault();undo()}});
   // step 4
   $('wGroupRule').innerHTML=Object.entries(GROUP_RULES).map(([k,t])=>'<option value="'+k+'">'+t+'</option>').join('');
   const applyRule=()=>{const v=$('wOrderRule').value;if(v==='groups')setOrder(groupedOrder($('wGroupRule').value),'groups');else if(v==='auto')setOrder(null,'auto');else if(v!=='custom')setOrder(presetOrder(v),v)};
@@ -226,7 +260,7 @@ export function bindWizard(onPreview){
   // step 5
   $('wCamMode').onclick=e=>{const b=e.target.closest('button');if(b)$('camMode').querySelector('[data-v="'+b.dataset.v+'"]').click();syncCam()};
   $('wTags').onclick=e=>{const b=e.target.closest('button');if(!b)return;WZ.tag={k:b.dataset.k,v:b.dataset.v};syncCam()};
-  $('wTagAll').onclick=()=>{snap(zones);zones.forEach(z=>z[WZ.tag.k]=WZ.tag.v);zonesChanged(true)};
+  $('wTagAll').onclick=()=>{zones.forEach(z=>z[WZ.tag.k]=WZ.tag.v);zonesChanged(true)};
   $('wFast').oninput=e=>{$('wFastV').textContent='×'+(+e.target.value).toFixed(1)};$('wFast').onchange=e=>{$('fastMul').value=e.target.value;$('fastMulV').textContent='×'+(+e.target.value).toFixed(1);$('fastMul').dispatchEvent(new Event('change'))};
   $('wFly').onclick=e=>{const b=e.target.closest('button');if(b)$('flyMode').querySelector('[data-v="'+b.dataset.v+'"]').click();syncCam()};
   bindSoundStep();

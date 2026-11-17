@@ -19,6 +19,7 @@ import {renderPal,setSegValue,updateInspector} from './inspector.js';
 import {setArt,setPalUser} from './load.js';
 import {T,busy,playing,rebuild,setPlayIcon,setPlaying} from './playback.js';
 import {syncSound} from './sound.js';
+import {resetHistory} from './history.js';
 /* ================= PROJECT (JSON + browser storage) ================= */
 export const LS_KEY='mcs.project.v1';export let lsTimer=0,lsOn=true,lsArmed=false;
 export function readURL(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
@@ -100,7 +101,7 @@ export async function applyProject(d){
     if(Array.isArray(d.palette)){setPalette(d.palette.slice());setPalUser(true)}
     if(d.order){setCustomOrder(d.order.custom||null,d.order.mode||'auto');$('orderPreset').value=orderMode;$('orderBadge').textContent=orderMode==='auto'?'авто':orderMode==='custom'?'власний':$('orderPreset').selectedOptions[0].textContent.toLowerCase()}
     if(d.FLY)FLY.segs=d.FLY.segs||null;
-    setToolSprite();renderPal('palette',true);ed.dirtyPaint=true;rebuild(false);updateInspector();res()}));
+    setToolSprite();renderPal('palette',true);ed.dirtyPaint=true;rebuild(false);updateInspector();resetHistory();res()}));
 }
 /* Autosave lives in IndexedDB (room for the page pictures, which rarely fit into localStorage's ~5 MB);
    localStorage is the fallback when IndexedDB is unavailable. */

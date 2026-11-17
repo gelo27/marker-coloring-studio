@@ -54,6 +54,7 @@
     <aside class="panel" id="panel">
       <div class="paneltop">
         <div class="seg uimode" id="uiMode"><button data-v="wiz" aria-pressed="true">Покроково</button><button data-v="adv" aria-pressed="false">Усі налаштування</button></div>
+        <div class="historyTools"><button class="btn small" id="historyUndo" disabled title="Ctrl+Z">↶ Скасувати</button><button class="btn small" id="historyRedo" disabled title="Ctrl+Shift+Z">↷ Повторити</button><span id="historyCount" aria-live="polite"></span></div>
       </div>
 
       <nav class="steps" id="steps" aria-label="Кроки">
@@ -106,6 +107,18 @@
           </div>
           <p class="hint" id="wMaskHint">Якщо ділянку не виділено окремою зоною, натисніть «Намалювати зону» й замалюйте її пензликом — скільки завгодно мазками, з відривом. Гумкою можна підправити краї, двома пальцями чи колесом — масштаб. Замальоване стане однією зоною; лінії малюнка всередині лишаться на папері.</p>
           <div class="selinfo" id="wZoneSel" hidden><span class="dot" id="wSelDot"></span><b id="wSelName"></b><button class="btn small" id="wSelSkip"></button><button class="btn small" id="wSelMerge" hidden></button><button class="btn small" id="wSelUnmerge" hidden>Роз'єднати</button></div>
+          <details class="bulkBox" id="wBulkBox">
+            <summary>Масове редагування зон <span id="wBulkCount">0 зон</span></summary>
+            <div class="bulkFields">
+              <div class="row"><label for="wBulkTarget">Застосувати до</label><select id="wBulkTarget"><option value="selected">Вибрані зони</option><option value="all">Усі зони</option><option value="unpainted">Без фарби</option><option value="painted">З кольором</option><option value="sameColor">Того ж кольору, що вибрана</option><option value="small">Дрібні (до 0,5% сторінки)</option></select></div>
+              <div class="row"><label for="wBulkAction">Дія</label><select id="wBulkAction"><option value="color">Задати колір</option><option value="skip">Не зафарбовувати</option><option value="paint">Зафарбовувати</option><option value="camera">Камера</option><option value="speed">Швидкість</option><option value="tool">Інструмент</option><option value="reset">Скинути налаштування</option></select></div>
+              <div class="row" id="wBulkColorRow"><label for="wBulkColor">Колір</label><input type="color" id="wBulkColor" value="#ff8fab"></div>
+              <div class="row" id="wBulkCameraRow" hidden><label for="wBulkCamera">Камера</label><select id="wBulkCamera"><option value="auto">Авто</option><option value="on">Крупний план</option><option value="off">Загальний план</option></select></div>
+              <div class="row" id="wBulkSpeedRow" hidden><label for="wBulkSpeed">Швидкість</label><select id="wBulkSpeed"><option value="auto">Авто</option><option value="normal">Звичайна</option><option value="fast">Швидка</option><option value="cut">Склейка</option></select></div>
+              <div class="row" id="wBulkToolRow" hidden><label for="wBulkTool">Інструмент</label><select id="wBulkTool"></select></div>
+              <div class="bulkFoot"><span id="wBulkHint">Виберіть зони на карті або змініть фільтр.</span><button class="btn small cta" id="wBulkApply" disabled>Застосувати</button></div>
+            </div>
+          </details>
           <p class="hint">Shift+клік (або Ctrl+клік) по зонах вибирає кілька — їх можна об'єднати в одну зону: вона замальовується разом і одним кольором.</p>
           <p class="hint">Кожна зона на карті має свій колір. Перевірте, чи не злиплися сусідні ділянки (так буває, коли в контурі розрив) і чи не загубились дрібні деталі. Торкніться зони, щоб вибрати її; колесо або два пальці — масштаб.</p>
         </section>
@@ -116,7 +129,7 @@
           <div class="pal big" id="wPal"></div>
           <div class="addc"><input type="color" id="wColor" value="#ff8fab" aria-label="Свій колір"><button class="btn small" id="wAddColor">Додати колір</button></div>
           <label class="switch"><input type="checkbox" id="wSame"> Замінювати колір в усіх зонах такого ж кольору</label>
-          <div class="btns"><button class="btn small" id="wUndo" disabled>Скасувати</button><button class="btn small" id="wAutoPal">Авто-розфарбування</button><button class="btn small" id="wShuffle">Перемішати</button><label class="btn small">Кольори з картинки…<input type="file" id="wRefFile" accept="image/*"></label></div>
+          <div class="btns"><button class="btn small" id="wAutoPal">Авто-розфарбування</button><button class="btn small" id="wShuffle">Перемішати</button><label class="btn small">Кольори з картинки…<input type="file" id="wRefFile" accept="image/*"></label></div>
           <label class="switch" id="wShadeRow" hidden><input type="checkbox" id="wShade" checked> Тіні й відблиски з оригіналу</label>
         </section>
 
@@ -508,6 +521,13 @@
   </div>
 </div>
 <div class="dropOverlay" id="dropOverlay" hidden><div><b>Відпустіть, щоб завантажити</b><span>картинку розмальовки або проєкт .json</span></div></div>
+<div class="preflightOverlay" id="preflightModal" hidden>
+  <section class="preflightCard" role="dialog" aria-modal="true" aria-labelledby="preflightTitle">
+    <div class="preflightHead"><h2 id="preflightTitle">Перевірка перед рендером</h2><button class="btn small" id="preflightClose" aria-label="Закрити">×</button></div>
+    <p id="preflightSummary"></p><ul id="preflightIssues" class="preflightIssues"></ul>
+    <div class="btns"><button class="btn" id="preflightFix">Перейти до зон</button><button class="btn cta" id="preflightContinue">Рендерити попри попередження</button></div>
+  </section>
+</div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
