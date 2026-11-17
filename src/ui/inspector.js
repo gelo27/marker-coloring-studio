@@ -8,6 +8,7 @@ import {resegment,setPalUser} from './load.js';
 import {busy,rebuild,setMode} from './playback.js';
 import {lsArm,lsSchedule} from './project.js';
 import {syncOrderUI,syncWizard,syncWizardSel} from './wizard.js';
+import {observeHistory} from './history.js';
 export function setOrder(ids,mode){setCustomOrder(ids,mode);$('orderPreset').value=mode;syncOrderUI();$('orderBadge').textContent=mode==='auto'?'авто':mode==='custom'?'власний':$('orderPreset').selectedOptions[0].textContent.toLowerCase();zonesChanged(ed.view==='order')}
 /* ================= INSPECTOR & PALETTE UI ================= */
 export function selZones(){return[...ed.sel].map(i=>zoneByI.get(i)).filter(Boolean)}
@@ -84,7 +85,7 @@ export function updateInspector(){
 }
 export function addToPalette(c){c=c.toLowerCase();if(!palette.some(p=>p.toLowerCase()===c))palette.push(c);palChanged()}
 /* the palette was edited by hand: it is the user's now (kept for the next page), shown everywhere, and saved */
-function palChanged(){setPalUser(true);renderPal('palette',true);renderPal('zPal',false);syncWizard();lsArm();lsSchedule()}
+function palChanged(){setPalUser(true);renderPal('palette',true);renderPal('zPal',false);syncWizard();observeHistory('Палітра');lsArm();lsSchedule()}
 /* a palette swatch; c=null is the "do not paint" swatch (white circle, red cross) */
 export function makeSwatch(c,on){const b=document.createElement('button');b.className='sw'+(c?'':' nop')+(on?' on':'');
   if(c){b.style.background=c;b.title=c;b.setAttribute('aria-label','Колір '+c)}else{b.title='Не замальовувати';b.setAttribute('aria-label','Не замальовувати зону')}return b}
@@ -104,10 +105,10 @@ export function renderPal(id,editable){
     b.onclick=()=>{const sel=selZones();if(sel.length){sel.forEach(z=>{z.skip=false;setZoneColor(z,c)});zonesChanged(true)}else{$('newColor').value=c}};
     el.appendChild(b)});
 }
-export function zonesChanged(paint){lsSchedule();setPlanDirty(true);if(paint)ed.dirtyPaint=true;updateInspector();renderPal('palette',true);syncWizard();if(!ed.on&&!busy){rebuild(true)}}
+export function zonesChanged(paint,historyKey){observeHistory('Зміна зон',historyKey||'');lsSchedule();setPlanDirty(true);if(paint)ed.dirtyPaint=true;updateInspector();renderPal('palette',true);syncWizard();if(!ed.on&&!busy){rebuild(true)}}
 export function bindInspector(){
   bindOrderList();
-  $('zColor').oninput=e=>{selZones().forEach(z=>{z.skip=false;setZoneColor(z,e.target.value)});if(ed.view!=='final'){ed.view='final';setSegValue2('viewSeg','final')}zonesChanged(true)};
+  $('zColor').oninput=e=>{selZones().forEach(z=>{z.skip=false;setZoneColor(z,e.target.value)});if(ed.view!=='final'){ed.view='final';setSegValue2('viewSeg','final')}zonesChanged(true,'zone-color')};
   $('zClose').onclick=e=>{const b=e.target.closest('button');if(!b)return;selZones().forEach(z=>z.close=b.dataset.v);zonesChanged(false)};
   $('zVShade').onclick=e=>{const b=e.target.closest('button');if(!b)return;selZones().forEach(z=>z.vshade=b.dataset.v);zonesChanged(true)};
   $('zSpeed').onclick=e=>{const b=e.target.closest('button');if(!b)return;selZones().forEach(z=>z.speed=b.dataset.v);zonesChanged(false)};

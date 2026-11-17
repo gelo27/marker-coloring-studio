@@ -219,4 +219,5 @@ export function setArtDoc(a){art=a}
 export function setSeg(s){seg=s}
 export function setPalette(p){palette=p}
 export function nextPalSeed(){return ++palSeed}
+export function setPalSeed(v){palSeed=Math.max(1,Math.floor(+v||1))}
 export function setCustomOrder(ids,mode){customOrder=ids;orderMode=mode}
