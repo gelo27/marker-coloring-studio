@@ -5,7 +5,7 @@ import {bumpPlanVer,plan,planDirty,viewFit} from './core/plan.js';
 import {extractLines,loadArtFromImage} from './core/segment.js';
 import {CAUSTICS,DESK,FLQ,GLT,IMP,INK,OUT,PREV,PUFF,S,SHADE,TOOLS,U,VS,isMobileUI,view} from './core/settings.js';
 import {$,SS,clamp,durLabel,mk} from './core/utils.js';
-import {DEFAULT_PALETTES,applyPalette,applySrcColors,art,composeColored,palSeed,seg,setPalette,zoneByI,zones} from './core/zones.js';
+import {DEFAULT_PALETTES,applyPalette,applySrcColors,art,composeColored,palSeed,seg,setCustomOrder,setPalSeed,setPalette,zoneByI,zones} from './core/zones.js';
 import {buildDemo} from './data/demoArt.js';
 import {bindEditor,ed,renderEditor} from './editor/editor.js';
 import {cam,camInit,camStep,penState} from './render/camera.js';
@@ -24,13 +24,39 @@ import {LANE,T,bindLane,busy,drawLane,loop,playFresh,playing,rebuild,seek,setLas
 import {LS_KEY,applyProject,loadImg,lsArm,lsClearAll,lsInit,lsOn,lsRead,lsSave,lsSchedule,projectData,readURL,restoreLast,setDeskImage,setLsOn,syncInk} from './ui/project.js';
 import {bindFullscreen} from './ui/stage.js';
 import {bindWizard,openFiles,syncWizard} from './ui/wizard.js';
+import {redoHistory,resetHistory,setHistoryRestoreHandler,undoHistory} from './ui/history.js';
 import './styles/app.css';
 import './addons/cats.js';
 import './styles/studio.css';
 export function boot(){
   // phones start with the light preview (half size, no camera effects); the choice is remembered
   {let q=null;try{q=localStorage.getItem('mcs.prev')}catch(e){}PREV.q=q||(isMobileUI()?'lite':'full');[...$('prevSeg').children].forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.q===PREV.q)))}
-  initPixi();bindFly();buildToolUI();applyFormat('9x16');bindEditor();bindInspector();buildFxUI();
+  initPixi();bindFly();buildToolUI();applyFormat('9x16');bindEditor();bindInspector();
+  const cloneHistoryValue=v=>v==null?[]:JSON.parse(JSON.stringify(v));
+  setHistoryRestoreHandler((snapshot,done)=>{
+    if(busy||!art||!seg)return false;
+    const currentGeometry={merges:art.merges||[],masks:art.masks||[],walls:art.walls||[]};
+    const geometryChanged=JSON.stringify(currentGeometry)!==JSON.stringify(snapshot.art);
+    const currentImp={thr:IMP.thr,useColors:IMP.useColors,lineK:IMP.lineK,minArea:IMP.minArea,inkTiny:IMP.inkTiny,vec:IMP.vec,vecSm:IMP.vecSm};
+    const segmentationChanged=JSON.stringify(currentImp)!==JSON.stringify(snapshot.IMP);
+    const applySnapshot=()=>{
+      Object.assign(IMP,snapshot.IMP);
+      art.merges=cloneHistoryValue(snapshot.art.merges);art.masks=cloneHistoryValue(snapshot.art.masks);art.walls=cloneHistoryValue(snapshot.art.walls);
+      setPalette(snapshot.palette.slice());setPalSeed(snapshot.palSeed);
+      setCustomOrder(snapshot.order&&snapshot.order.length?snapshot.order.slice():null,snapshot.orderMode);
+      const byId=new Map(snapshot.zones.map(z=>[z.i,z]));
+      zones.forEach(z=>{const saved=byId.get(z.i);if(saved)Object.assign(z,saved)});
+      ed.sel.clear();ed.dirtyPaint=true;ed.dirtySel=true;applyToolUniforms();zonesChanged(true);done();
+    };
+    if(geometryChanged||segmentationChanged){
+      Object.assign(IMP,snapshot.IMP);
+      art.merges=cloneHistoryValue(snapshot.art.merges);art.masks=cloneHistoryValue(snapshot.art.masks);art.walls=cloneHistoryValue(snapshot.art.walls);
+      resegment(applySnapshot);
+    }else applySnapshot();
+    return true;
+  });
+  $('historyUndo').onclick=undoHistory;$('historyRedo').onclick=redoHistory;
+  buildFxUI();
   $('play').onclick=togglePlay;
   $('restart').onclick=()=>{if(busy)return;if(ed.on)setMode('anim');if(planDirty)rebuild(false);setPlaying(false);stopAudio();seek(0);playFresh()};
   $('bar').onclick=e=>{if(busy)return;if(ed.on)setMode('anim');if(planDirty)rebuild(false);const r=e.currentTarget.getBoundingClientRect();seek((e.clientX-r.left)/r.width*plan.total);if(playing)startAudio(T)};
@@ -133,7 +159,15 @@ export function boot(){
   $('vsW').oninput=e=>{$('vsWV').textContent=(+e.target.value).toFixed(2)};$('vsW').onchange=e=>{VS.w=+e.target.value;zonesChanged(true)};
   $('vsDark').oninput=e=>{$('vsDarkV').textContent=(+e.target.value).toFixed(2)};$('vsDark').onchange=e=>{VS.dark=+e.target.value;zonesChanged(true)};
   $('render').onclick=exportVideo;$('rhCancel').onclick=()=>{REN.cancel=true;$('rhInfo').textContent='Скасовую…'};$('cancelRender').onclick=()=>{REN.cancel=true;$('renderInfo').textContent='Скасовую…'};$('save').onclick=saveVideo;
-  document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();togglePlay()}});
+  document.addEventListener('keydown',e=>{
+    if(e.code==='Space'&&e.target===document.body){e.preventDefault();togglePlay();return}
+    if(busy||!(e.ctrlKey||e.metaKey))return;
+    const tag=(e.target&&e.target.tagName||'').toUpperCase();
+    if(['INPUT','TEXTAREA','SELECT'].includes(tag)||(e.target&&e.target.isContentEditable))return;
+    const key=e.key.toLowerCase();
+    if(key==='z'){e.preventDefault();if(e.shiftKey)redoHistory();else undoHistory()}
+    else if(key==='y'){e.preventDefault();redoHistory()}
+  });
   window.__studio={plan:()=>plan,inkStats:()=>{const I=plan.ink;if(!I)return null;const st=I.st;let dots=0,L=0;st.forEach(q=>{if(q.S.dot)dots++;L+=q.S.len});const g=[];for(let k=1;k<st.length;k++)g.push(Math.hypot(st[k].a[0]-st[k-1].b[0],st[k].a[1]-st[k-1].b[1]));g.sort((a,b)=>b-a);return{n:st.length,dots,L:Math.round(L),c0:I.c0,c1:+I.c1.toFixed(2),bigGaps:g.slice(0,6).map(Math.round),joined:g.filter(x=>x<5).length,lifts:g.filter(x=>x>=5).length,liftLen:Math.round(g.reduce((a,b)=>a+b,0))}},stepRun:(a,b,fps)=>{seek(a);for(let v=a+1/fps;v<=b;v+=1/fps){camStep(v,1/fps);renderAt(v);setT(v)}return {vis:grainPool.filter(s=>s.visible).length}},grainStats:()=>({vis:grainPool.filter(s=>s.visible).length,sh:grainShPool.filter(s=>s.visible).length}),penTrace:(a,b,fps)=>{const out=[];fps=fps||60;const i0=Math.round(a*fps),i1=Math.round(b*fps);for(let i=0;i<=i1;i++){const v=i/fps;if(i===0){resetPaint();camInit()}else camStep(v,1/fps);if(i>=i0){renderAt(v);const p=penC.position;out.push([+v.toFixed(3),Math.round(p.x),Math.round(p.y),+penC.rotation.toFixed(3),+penC.scale.y.toFixed(2),penC.visible?1:0])}}return out},camTrace:(a,b,n)=>{seek(a);const out=[];let k=0;for(let v=a;v<b;v+=1/60,k++){camStep(v,1/60);if(k%(n||10)===0)out.push([+v.toFixed(2),Math.round(cam.x),Math.round(cam.y),+cam.z.toFixed(2),cam.shot,cam.nib?1:0])}return out},focusTrace:(a,b)=>{seek(a);const out=[];for(let v=a;v<b;v+=1/60){camStep(v,1/60);const st=penState(plan.cOf(v)),fit=viewFit()*cam.z;out.push([+cam.fy.toFixed(3),+clamp((st.y-cam.y)*fit/view.H+.5,.1,.9).toFixed(3)])}return out},shots:()=>plan.shots.map(s=>({ts:+plan.vOf(s.ts).toFixed(2),key:s.key,z:+(s.z||0).toFixed(2),liq:!!s.liq,trans:s.trans})),flDump:()=>{const r=plan.order.find(r=>r.fl&&r.i===68);if(!r)return null;const F=r.fl,dp=F.drops[0];const row=[],T=[];for(let x=dp.gx;x<Math.min(F.gw-1,dp.gx+60);x++){const k=dp.gy*F.gw+x;row.push(+F.d[k].toFixed(3));T.push(+(F.T[k]-dp.ta).toFixed(3))}return{row,T,cs:F.cs,gw:F.gw,t:F.t-dp.ta}},regTimes:()=>plan.order.map(r=>({i:r.i,a:plan.vOf(r.t0),b:plan.vOf(r.t0+r.dur),area:r.area})),fontReady:()=>{setOutroFont(true)},cyl:(n,f)=>{if(f)delete CYL_CACHE[n];return cylTex(n)},seek:v=>{if(ed.on)setMode('anim');seek(v)},renderFrame:(i,fps)=>{const v=i/fps;if(i===0){resetPaint();camInit()}else camStep(v,1/fps);renderAt(v);return app.view},
     total:()=>plan.total,zoneSet:(ids,k,v)=>{ids.forEach(i=>{const z=zoneByI.get(i);if(z)z[k]=v});applyToolUniforms();zonesChanged(false)},glueTimes:()=>plan.order.filter(r=>TOOLS[r.tool].glue).map(r=>({a:plan.vOf(r.t0+r.dur*r.sf),b:plan.vOf(r.t1),area:r.area})).sort((x,y)=>y.area-x.area).slice(0,3),turns:()=>(plan.turns||[]).map(t=>({v:plan.vOf(t.c0),a:t.a1})),composeColored,audioWav:async()=>{SND.data=SND.base=null;const A=await ensureAudio(true);return wavB64(A)},saveFrame,flyTimes:()=>plan.shots.filter(x=>x.fly).map(x=>plan.vOf(x.ts)),revealV:()=>plan.vOf(plan.revealC),setFormat:f=>{applyFormat(f);rebuild(true)},setMode,ed,zones:()=>zones,select:ids=>{ed.sel=new Set(ids);ed.dirtySel=true;updateInspector()},S,rebuild,renderEditor:()=>renderEditor(1),catStats,catMotion,camCheck,catWalks,underFeet,tipJerk,toolPreview:(t,col,h)=>{const B=buildTool(t),c=new PIXI.Container(),bg=new PIXI.Graphics();bg.beginFill(0xF7F3EC);bg.drawRect(-60,-260,1400,520);bg.endFill();c.addChild(bg);B.tint.forEach(g=>g.tint=col||0xE3416F);B.sh.position.set((4+38*(h||0))*SS,(6+52*(h||0))*SS);B.sh.rotation=.31;shadowHover(B.sh,h||0);c.addChild(B.sh);c.addChild(B.c);const cv=app.renderer.extract.canvas(c);c.destroy({children:true});return cv},
     loadArtURL:url=>new Promise(res=>{const img=new Image();img.onload=()=>{const a=loadArtFromImage(img);a.srcURL=url;setArt(a,true);setTimeout(res,600)};img.src=url}),projectData,applyProject,lsSave:()=>{lsArm();lsSave()},lsRead};
